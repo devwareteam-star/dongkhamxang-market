@@ -6,6 +6,7 @@ const nextConfig = {
   images: {
     domains: ['images.pexels.com'],
   },
+  output: 'export'  // ✅ Use a string here!
 }
 
 module.exports = nextConfig
