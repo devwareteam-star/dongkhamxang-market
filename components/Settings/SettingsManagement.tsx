@@ -2,6 +2,7 @@
 
 import React, { useState } from 'react';
 import { useData } from '@/lib/contexts/DataContext';
+import { useAuth } from '@/lib/contexts/AuthContext'; // Add this line
 import { 
   Settings, 
   Building2, 

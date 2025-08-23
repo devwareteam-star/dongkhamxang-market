@@ -1,6 +1,8 @@
 'use client';
 
 import React, { useState } from 'react';
+import { useData } from '@/lib/contexts/DataContext';
+
 import { useAuth } from '@/lib/contexts/AuthContext';
 import { 
   Users, 

@@ -61,39 +61,27 @@ const PaymentCollection: React.FC = () => {
     setIsPaymentModalOpen(true);
   };
 
-  const handlePaymentCollectedFromModal = async (data: { paymentMethod: 'cash' | 'transfer'; notes?: string }) => {
-    if (!selectedPayment) return;
+const handlePaymentCollectedFromModal = async (data: { 
+  paymentMethod: 'cash' | 'transfer'; 
+  notes?: string | null | undefined 
+}) => {
+  if (!selectedPayment) return;
 
-    try {
-      const receiptNumber = generateReceiptNumber();
-      await updatePayment(selectedPayment.id, {
-        status: 'paid',
-        paidDate: new Date(),
-        paymentMethod: data.paymentMethod,
-        receiptNumber,
-        employeeId: user?.id,
-        notes: data.notes
-      });
-
-      setIsPaymentModalOpen(false);
-      
-      // Show receipt modal
-      const updatedPayment = {
-        ...selectedPayment,
-        status: 'paid' as const,
-        paidDate: new Date(),
-        paymentMethod: data.paymentMethod,
-        receiptNumber,
-        employeeId: user?.id,
-        notes: data.notes
-      };
-      
-      setSelectedPayment(updatedPayment);
-      setIsReceiptModalOpen(true);
-    } catch (error) {
-      console.error('Error collecting payment:', error);
-    }
-  };
+  try {
+    const receiptNumber = generateReceiptNumber();
+    await updatePayment(selectedPayment.id, {
+      status: 'paid',
+      paidDate: new Date(),
+      paymentMethod: data.paymentMethod,
+      receiptNumber,
+      employeeId: user?.id,
+      notes: data.notes || undefined // Convert null to undefined if needed
+    });
+    // ... rest of the function
+  } catch (error) {
+    console.error('Error collecting payment:', error);
+  }
+};
 
   const handlePrintReceipt = (payment: Payment) => {
     setSelectedPayment(payment);

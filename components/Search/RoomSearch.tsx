@@ -25,7 +25,7 @@ const RoomSearch: React.FC = () => {
     return matchesSearch && matchesStatus && matchesZone;
   });
 
-  const zones = [...new Set(rooms.map(room => room.zone))].sort();
+  const zones = Array.from(new Set(rooms.map(room => room.zone))).sort();
 
   const getStatusColor = (status: string) => {
     switch (status) {

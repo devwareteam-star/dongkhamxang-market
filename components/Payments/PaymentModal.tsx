@@ -7,7 +7,7 @@ import { Payment } from '@/types';
 interface PaymentModalProps {
   isOpen: boolean;
   onClose: () => void;
-  onSubmit: (data: { paymentMethod: 'cash' | 'transfer'; notes?: string }) => void;
+  onSubmit: (data: { paymentMethod: 'cash' | 'transfer'; notes?: string | null }) => void;
   payment: Payment | null;
 }
 
@@ -17,7 +17,7 @@ const PaymentModal: React.FC<PaymentModalProps> = ({ isOpen, onClose, onSubmit, 
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    onSubmit({ paymentMethod, notes: notes.trim() || null });
+    onSubmit({ paymentMethod, notes: notes.trim() || undefined });
     setNotes('');
     setPaymentMethod('cash');
   };

@@ -55,10 +55,10 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
           if (userData) {
             // Convert Firebase Timestamps to JavaScript Dates
             const convertedUser = {
-              ...userData,
-              createdAt: userData.createdAt?.toDate ? userData.createdAt.toDate() : userData.createdAt,
-              lastLogin: userData.lastLogin?.toDate ? userData.lastLogin.toDate() : userData.lastLogin
-            } as User;
+  ...userData,
+  createdAt: (userData as any).createdAt?.toDate ? (userData as any).createdAt.toDate() : (userData as any).createdAt,
+  lastLogin: (userData as any).lastLogin?.toDate ? (userData as any).lastLogin.toDate() : (userData as any).lastLogin
+} as User;
             setUser(convertedUser);
           }
         } catch (error) {
@@ -107,7 +107,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
             id: firebaseUser.uid,
             uid: firebaseUser.uid,
             lastLogin: new Date(),
-            createdAt: userData.createdAt?.toDate ? userData.createdAt.toDate() : userData.createdAt
+            createdAt: (userData as any).createdAt?.toDate ? (userData as any).createdAt.toDate() : (userData as any).createdAt
           } as User;
           setUser(updatedUser);
           await usersService.update(firebaseUser.uid, { lastLogin: new Date() });

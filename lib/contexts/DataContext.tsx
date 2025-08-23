@@ -117,6 +117,7 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
     generateMissingPayments();
   }, [tenants.length, rooms.length, loading]);
+
   const loadData = async () => {
     try {
       setLoading(true);
@@ -138,33 +139,33 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
         // Convert Firebase Timestamps to JavaScript Dates
         const convertedRooms = roomsData.map(room => ({
           ...room,
-          contractStartDate: room.contractStartDate?.toDate ? room.contractStartDate.toDate() : room.contractStartDate,
-          contractEndDate: room.contractEndDate?.toDate ? room.contractEndDate.toDate() : room.contractEndDate
+          contractStartDate: (room as any).contractStartDate?.toDate ? (room as any).contractStartDate.toDate() : (room as any).contractStartDate,
+          contractEndDate: (room as any).contractEndDate?.toDate ? (room as any).contractEndDate.toDate() : (room as any).contractEndDate
         })) as Room[];
         
         const convertedTenants = tenantsData.map(tenant => ({
           ...tenant,
-          startDate: tenant.startDate?.toDate ? tenant.startDate.toDate() : tenant.startDate,
-          endDate: tenant.endDate?.toDate ? tenant.endDate.toDate() : tenant.endDate,
-          createdAt: tenant.createdAt?.toDate ? tenant.createdAt.toDate() : tenant.createdAt
-        })) as Tenant[];
+          startDate: (tenant as any).startDate?.toDate ? (tenant as any).startDate.toDate() : (tenant as any).startDate,
+          endDate: (tenant as any).endDate?.toDate ? (tenant as any).endDate.toDate() : (tenant as any).endDate,
+          createdAt: (tenant as any).createdAt?.toDate ? (tenant as any).createdAt.toDate() : (tenant as any).createdAt
+        })) as unknown as Tenant[];
         
         const convertedPayments = paymentsData.map(payment => ({
           ...payment,
-          dueDate: payment.dueDate?.toDate ? payment.dueDate.toDate() : payment.dueDate,
-          paidDate: payment.paidDate?.toDate ? payment.paidDate.toDate() : payment.paidDate,
-          createdAt: payment.createdAt?.toDate ? payment.createdAt.toDate() : payment.createdAt
-        })) as Payment[];
+          dueDate: (payment as any).dueDate?.toDate ? (payment as any).dueDate.toDate() : (payment as any).dueDate,
+          paidDate: (payment as any).paidDate?.toDate ? (payment as any).paidDate.toDate() : (payment as any).paidDate,
+          createdAt: (payment as any).createdAt?.toDate ? (payment as any).createdAt.toDate() : (payment as any).createdAt
+        })) as unknown as Payment[];
         
         const convertedReceipts = receiptsData.map(receipt => ({
           ...receipt,
-          issuedDate: receipt.issuedDate?.toDate ? receipt.issuedDate.toDate() : receipt.issuedDate,
-          createdAt: receipt.createdAt?.toDate ? receipt.createdAt.toDate() : receipt.createdAt
-        })) as Receipt[];
+          issuedDate: (receipt as any).issuedDate?.toDate ? (receipt as any).issuedDate.toDate() : (receipt as any).issuedDate,
+          createdAt: (receipt as any).createdAt?.toDate ? (receipt as any).createdAt.toDate() : (receipt as any).createdAt
+        })) as unknown as Receipt[];
         
         const convertedNotifications = notificationsData.map(notification => ({
           ...notification,
-          createdAt: notification.createdAt?.toDate ? notification.createdAt.toDate() : notification.createdAt
+          createdAt: (notification as any).createdAt?.toDate ? (notification as any).createdAt.toDate() : (notification as any).createdAt
         })) as Notification[];
         
         setRooms(convertedRooms);
@@ -255,7 +256,7 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
           contractStartDate: tenant.startDate,
           contractEndDate: tenant.contractType === 'yearly' 
             ? new Date(tenant.startDate.getFullYear() + 1, tenant.startDate.getMonth(), tenant.startDate.getDate())
-            : null,
+            : undefined,
           deposit: tenant.deposit
         });
         
@@ -269,7 +270,7 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
                 contractStartDate: tenant.startDate,
                 contractEndDate: tenant.contractType === 'yearly' 
                   ? new Date(tenant.startDate.getFullYear() + 1, tenant.startDate.getMonth(), tenant.startDate.getDate())
-                  : null,
+                  : undefined,
                 deposit: tenant.deposit
               }
             : room
@@ -295,7 +296,7 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
                 status: 'occupied' as const,
                 tenantId: newTenant.id,
                 contractStartDate: tenant.startDate,
-                contractEndDate: null,
+                contractEndDate: undefined,
                 deposit: tenant.deposit
               }
             : room
@@ -350,10 +351,10 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
         // Set old room to vacant
         await updateRoom(oldTenant.roomId, { 
           status: 'vacant',
-          tenantId: null,
-          contractStartDate: null,
-          contractEndDate: null,
-          deposit: null
+          tenantId: undefined,
+          contractStartDate: undefined,
+          contractEndDate: undefined,
+          deposit: undefined
         });
         
         // Set new room to occupied
@@ -384,10 +385,10 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
       if (tenant) {
         await updateRoom(tenant.roomId, { 
           status: 'vacant',
-          tenantId: null,
-          contractStartDate: null,
-          contractEndDate: null,
-          deposit: null
+          tenantId: undefined,
+          contractStartDate: undefined,
+          contractEndDate: undefined,
+          deposit: undefined
         });
       }
       
@@ -404,10 +405,10 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
             ? { 
                 ...room, 
                 status: 'vacant',
-                tenantId: null,
-                contractStartDate: null,
-                contractEndDate: null,
-                deposit: null
+                tenantId: undefined,
+                contractStartDate: undefined,
+                contractEndDate: undefined,
+                deposit: undefined
               }
             : room
         ));
@@ -683,6 +684,7 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
       return () => clearInterval(interval);
     }
   }, [payments.length]);
+
   const updateSettings = (newSettings: Partial<SystemSettings>) => {
     setSettings(prev => ({ ...prev, ...newSettings }));
   };
@@ -779,7 +781,7 @@ export const useData = () => {
   return context;
 };
 
-// Mock data generation functions (same as before)
+// Mock data generation functions
 const generateMockRooms = (): Room[] => {
   const rooms: Room[] = [];
   const zones = ['A', 'B', 'C', 'D', 'E', 'F'];
@@ -796,6 +798,7 @@ const generateMockRooms = (): Room[] => {
       id: `room-${i}`,
       roomNumber,
       size,
+      dailyRate: baseRate,
       monthlyRate: baseRate * 25,
       yearlyRate: baseRate * 280,
       status: statuses[Math.floor(Math.random() * statuses.length)],
