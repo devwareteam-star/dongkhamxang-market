@@ -2,27 +2,32 @@
 
 import React, { useState } from 'react';
 import { X, CreditCard, Banknote, Smartphone } from 'lucide-react';
-import { Payment } from '@/types';
+import { Payment , Space, Tenant} from '@/types';
 
 interface PaymentModalProps {
   isOpen: boolean;
   onClose: () => void;
-  onSubmit: (data: { paymentMethod: 'cash' | 'transfer'; notes?: string | null }) => void;
+  onSubmit: (data: { paymentMethod: 'ເງິນສົດ' | 'ໂອນເງິນ' | 'BCEL' | 'JDB'; notes?: string; }) => Promise<void>;
   payment: Payment | null;
+  spaces: Space[]; // Add this
+  tenants: Tenant[]; // Add this for future use
 }
 
-const PaymentModal: React.FC<PaymentModalProps> = ({ isOpen, onClose, onSubmit, payment }) => {
-  const [paymentMethod, setPaymentMethod] = useState<'cash' | 'transfer'>('cash');
+const PaymentModal: React.FC<PaymentModalProps> = ({ isOpen, onClose, onSubmit, payment, spaces, tenants }) => {
+  const [paymentMethod, setPaymentMethod] = useState<'ເງິນສົດ' | 'ໂອນເງິນ' | 'BCEL' | 'JDB'>('ເງິນສົດ');
   const [notes, setNotes] = useState('');
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     onSubmit({ paymentMethod, notes: notes.trim() || undefined });
     setNotes('');
-    setPaymentMethod('cash');
+    setPaymentMethod('ເງິນສົດ');
   };
 
   if (!isOpen || !payment) return null;
+
+  const room = spaces.find(s => s.id === payment.roomId);
+const tenant = tenants.find(t => t.tenantId === payment.tenantId);
 
   const getPaymentTypeText = (type: Payment['paymentType']) => {
     switch (type) {
@@ -56,7 +61,7 @@ const PaymentModal: React.FC<PaymentModalProps> = ({ isOpen, onClose, onSubmit, 
           <div className="bg-blue-50 rounded-lg p-4 mb-6">
             <h3 className="font-medium text-blue-900 mb-2">รายละเอียดการชำระ</h3>
             <div className="space-y-1 text-sm">
-              <p><span className="text-blue-700">ห้อง:</span> {payment.roomId}</p>
+              <p><span className="text-blue-700">ห้อง:</span> {room?.spaceCode || 'ไม่ระบุ'}</p>
               <p><span className="text-blue-700">จำนวนเงิน:</span> ฿{payment.amount.toLocaleString()}</p>
               <p><span className="text-blue-700">รอบชำระ:</span> {getPaymentTypeText(payment.paymentType)}</p>
               <p><span className="text-blue-700">กำหนดชำระ:</span> {new Date(payment.dueDate).toLocaleDateString('th-TH')}</p>
@@ -75,9 +80,9 @@ const PaymentModal: React.FC<PaymentModalProps> = ({ isOpen, onClose, onSubmit, 
               <div className="grid grid-cols-2 gap-3">
                 <button
                   type="button"
-                  onClick={() => setPaymentMethod('cash')}
+                  onClick={() => setPaymentMethod('ເງິນສົດ')}
                   className={`flex items-center justify-center space-x-2 p-4 border-2 rounded-lg transition-all ${
-                    paymentMethod === 'cash'
+                    paymentMethod === 'ເງິນສົດ'
                       ? 'border-green-500 bg-green-50 text-green-700'
                       : 'border-gray-300 hover:border-gray-400 text-gray-700'
                   }`}
@@ -87,9 +92,9 @@ const PaymentModal: React.FC<PaymentModalProps> = ({ isOpen, onClose, onSubmit, 
                 </button>
                 <button
                   type="button"
-                  onClick={() => setPaymentMethod('transfer')}
+                  onClick={() => setPaymentMethod('ໂອນເງິນ')}
                   className={`flex items-center justify-center space-x-2 p-4 border-2 rounded-lg transition-all ${
-                    paymentMethod === 'transfer'
+                    paymentMethod === 'ໂອນເງິນ'
                       ? 'border-blue-500 bg-blue-50 text-blue-700'
                       : 'border-gray-300 hover:border-gray-400 text-gray-700'
                   }`}
@@ -101,7 +106,7 @@ const PaymentModal: React.FC<PaymentModalProps> = ({ isOpen, onClose, onSubmit, 
             </div>
 
             {/* QR Code for Transfer */}
-            {paymentMethod === 'transfer' && (
+            {paymentMethod === 'ໂອນເງິນ' && (
               <div className="bg-blue-50 rounded-lg p-6 text-center">
                 <h3 className="font-medium text-blue-900 mb-4">สแกน QR Code เพื่อโอนเงิน</h3>
                 <div className="bg-white p-4 rounded-lg inline-block shadow-sm">

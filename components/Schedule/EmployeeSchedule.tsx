@@ -14,7 +14,7 @@ import {
 
 const EmployeeSchedule: React.FC = () => {
   const { user } = useAuth();
-  const { payments, rooms, tenants } = useData();
+  const { payments, spaces, tenants } = useData();
   const [selectedDate, setSelectedDate] = useState(new Date().toISOString().split('T')[0]);
 
   // Get tasks for the selected date
@@ -22,15 +22,17 @@ const EmployeeSchedule: React.FC = () => {
   const tasksForDate = payments.filter(payment => {
     const dueDate = new Date(payment.dueDate);
     return dueDate.toDateString() === selectedDateObj.toDateString() && 
-           (payment.status === 'pending' || payment.status === 'overdue');
+    payment.paymentStatus === 'ລໍຖ້າ' || payment.paymentStatus === 'ເກີນກຳນົດ'
   });
 
   // Get completed tasks for today
   const today = new Date();
   const completedToday = payments.filter(payment => 
-    payment.paidDate && 
-    new Date(payment.paidDate).toDateString() === today.toDateString() &&
-    payment.employeeId === user?.id
+    payment.paymentDate
+ && 
+    new Date(payment.paymentDate
+).toDateString() === today.toDateString() &&
+    payment.processedBy === user?.userId
   );
 
   const getTaskPriority = (payment: any) => {
@@ -134,7 +136,7 @@ const EmployeeSchedule: React.FC = () => {
 
         <div className="divide-y divide-gray-100">
           {tasksForDate.map((payment) => {
-            const room = rooms.find(r => r.id === payment.roomId);
+            const room = spaces.find(r => r.spaceId === (payment.spaceIds?.[0] || payment.roomId));
             const tenant = tenants.find(t => t.id === payment.tenantId);
             const priority = getTaskPriority(payment);
 
@@ -148,7 +150,7 @@ const EmployeeSchedule: React.FC = () => {
                     }`}></div>
                     <div>
                       <div className="flex items-center space-x-2">
-                        <h4 className="font-medium text-gray-900">เก็บเงินห้อง {room?.roomNumber}</h4>
+                        <h4 className="font-medium text-gray-900">เก็บเงินห้อง {room?.spaceCode}</h4>
                         <span className={`px-2 py-1 text-xs font-medium rounded-full ${priority.color}`}>
                           {priority.text}
                         </span>
@@ -156,11 +158,11 @@ const EmployeeSchedule: React.FC = () => {
                       <div className="flex items-center space-x-4 mt-1 text-sm text-gray-600">
                         <div className="flex items-center space-x-1">
                           <User className="w-3 h-3" />
-                          <span>{tenant?.name}</span>
+                          <span>{tenant?.tenantName}</span>
                         </div>
                         <div className="flex items-center space-x-1">
                           <MapPin className="w-3 h-3" />
-                          <span>{room?.location}</span>
+                          <span>{room?.zone}</span>
                         </div>
                         <div className="flex items-center space-x-1">
                           <Clock className="w-3 h-3" />
@@ -170,7 +172,7 @@ const EmployeeSchedule: React.FC = () => {
                     </div>
                   </div>
                   <div className="text-right">
-                    <p className="font-bold text-green-600">฿{payment.amount.toLocaleString()}</p>
+                    <p className="font-bold text-green-600">฿{payment.amountPaid || payment.amountDue.toLocaleString()}</p>
                     <p className="text-sm text-gray-500">{payment.paymentType === 'monthly' ? 'รายเดือน' : 'รายปี'}</p>
                   </div>
                 </div>
@@ -196,7 +198,7 @@ const EmployeeSchedule: React.FC = () => {
           </div>
           <div className="divide-y divide-gray-100">
             {completedToday.slice(0, 5).map((payment) => {
-              const room = rooms.find(r => r.id === payment.roomId);
+              const room = spaces.find(r => r.spaceId === (payment.spaceIds?.[0] || payment.roomId));
               const tenant = tenants.find(t => t.id === payment.tenantId);
 
               return (
@@ -205,14 +207,16 @@ const EmployeeSchedule: React.FC = () => {
                     <div className="flex items-center space-x-4">
                       <CheckCircle className="w-5 h-5 text-green-600" />
                       <div>
-                        <h4 className="font-medium text-gray-900">ห้อง {room?.roomNumber}</h4>
-                        <p className="text-sm text-gray-600">{tenant?.name}</p>
+                        <h4 className="font-medium text-gray-900">ห้อง {room?.spaceCode}</h4>
+                        <p className="text-sm text-gray-600">{tenant?.tenantName}</p>
                       </div>
                     </div>
                     <div className="text-right">
-                      <p className="font-bold text-green-600">฿{payment.amount.toLocaleString()}</p>
+                      <p className="font-bold text-green-600">฿{payment.amountPaid || payment.amountDue.toLocaleString()}</p>
                       <p className="text-xs text-gray-500">
-                        {payment.paidDate ? new Date(payment.paidDate).toLocaleTimeString('th-TH') : ''}
+                        {payment.paymentDate
+ ? new Date(payment.paymentDate
+).toLocaleTimeString('th-TH') : ''}
                       </p>
                     </div>
                   </div>

@@ -7,7 +7,7 @@ import Sidebar from '@/components/Layout/Sidebar';
 import Header from '@/components/Layout/Header';
 import AdminDashboard from '@/components/Dashboard/AdminDashboard';
 import EmployeeDashboard from '@/components/Dashboard/EmployeeDashboard';
-import RoomManagement from '@/components/Rooms/RoomManagement';
+import SpaceManagement from '@/components/Rooms/RoomManagement';
 import PaymentCollection from '@/components/Payments/PaymentCollection';
 import ReceiptManagement from '@/components/Receipts/ReceiptManagement';
 import ReportsManagement from '@/components/Reports/ReportsManagement';
@@ -28,8 +28,8 @@ export default function Home() {
       <div className="min-h-screen bg-gradient-to-br from-blue-50 to-indigo-100 flex items-center justify-center">
         <div className="text-center">
           <div className="w-16 h-16 border-4 border-blue-600 border-t-transparent rounded-full animate-spin mx-auto mb-4"></div>
-          <p className="text-gray-600 font-medium">กำลังโหลดระบบ...</p>
-          <p className="text-sm text-gray-500 mt-1">กรุณารอสักครู่</p>
+          <p className="text-gray-600 font-medium">ກຳລັງໂຫຼດລະບົບ...</p>
+          <p className="text-sm text-gray-500 mt-1">ກະລຸນາລໍຖ້າສັກຄູ່</p>
         </div>
       </div>
     );
@@ -39,34 +39,68 @@ export default function Home() {
     return <LoginForm />;
   }
 
+  // Helper function to check permissions
+  const hasPermission = (resource: keyof typeof user.permissions, action: 'read' | 'write' | 'delete') => {
+    return user.permissions?.[resource]?.[action] || false;
+  };
+
+  // Helper function to check if user is admin or manager
+  const isAdminOrManager = () => {
+    return user.role === 'manager';
+  };
+
+  // Access denied component
+  const AccessDenied = () => (
+    <div className="text-center py-12">
+      <div className="mx-auto w-24 h-24 bg-red-100 rounded-full flex items-center justify-center mb-4">
+        <svg className="w-12 h-12 text-red-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 15v2m0 0v2m0-2h2m-2 0H10m2-8V7" />
+        </svg>
+      </div>
+      <h3 className="text-lg font-medium text-gray-900 mb-2">ບໍ່ມີສິດເຂົ້າເຖິງ</h3>
+      <p className="text-gray-500">ທ່ານບໍ່ມີສິດເຂົ້າເຖິງໜ້ານີ້</p>
+    </div>
+  );
+
   const renderContent = () => {
     switch (activeView) {
       case 'dashboard':
-        return user.role === 'admin' ? <AdminDashboard /> : <EmployeeDashboard />;
+        return isAdminOrManager() ? <AdminDashboard /> : <EmployeeDashboard />;
+      
+      case 'spaces':
       case 'rooms':
-        return user.role === 'admin' ? <RoomManagement /> : <div className="text-center py-12"><p className="text-gray-500">ไม่มีสิทธิ์เข้าถึงหน้านี้</p></div>;
+        return hasPermission('spaces', 'read') ? <SpaceManagement /> : <AccessDenied />;
+      
       case 'tenants':
-        return user.role === 'admin' ? <TenantManagement /> : <div className="text-center py-12"><p className="text-gray-500">ไม่มีสิทธิ์เข้าถึงหน้านี้</p></div>;
+        return hasPermission('tenants', 'read') ? <TenantManagement /> : <AccessDenied />;
+      
       case 'collect-payment':
-        return <PaymentCollection />;
       case 'payments':
-        return user.role === 'admin' ? <PaymentCollection /> : <div className="text-center py-12"><p className="text-gray-500">ไม่มีสิทธิ์เข้าถึงหน้านี้</p></div>;
+        return hasPermission('payments', 'read') ? <PaymentCollection /> : <AccessDenied />;
+      
       case 'receipts':
-        return <ReceiptManagement />;
+        return hasPermission('payments', 'read') ? <ReceiptManagement /> : <AccessDenied />;
+      
       case 'reports':
-        return user.role === 'admin' ? <ReportsManagement /> : <div className="text-center py-12"><p className="text-gray-500">ไม่มีสิทธิ์เข้าถึงหน้านี้</p></div>;
+        return hasPermission('reports', 'read') ? <ReportsManagement /> : <AccessDenied />;
+      
       case 'notifications':
-        return <NotificationCenter />;
+        return <NotificationCenter />; // All users can see notifications
+      
       case 'users':
-        return user.role === 'admin' ? <UserManagement /> : <div className="text-center py-12"><p className="text-gray-500">ไม่มีสิทธิ์เข้าถึงหน้านี้</p></div>;
+        return hasPermission('users', 'read') ? <UserManagement /> : <AccessDenied />;
+      
       case 'settings':
-        return user.role === 'admin' ? <SettingsManagement /> : <div className="text-center py-12"><p className="text-gray-500">ไม่มีสิทธิ์เข้าถึงหน้านี้</p></div>;
+        return isAdminOrManager() ? <SettingsManagement /> : <AccessDenied />;
+      
       case 'search':
-        return <RoomSearch />;
+        return hasPermission('spaces', 'read') ? <RoomSearch /> : <AccessDenied />;
+      
       case 'schedule':
-        return <EmployeeSchedule />;
+        return <EmployeeSchedule />; // All users can see their schedule
+      
       default:
-        return user.role === 'admin' ? <AdminDashboard /> : <EmployeeDashboard />;
+        return isAdminOrManager() ? <AdminDashboard /> : <EmployeeDashboard />;
     }
   };
 

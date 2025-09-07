@@ -13,7 +13,7 @@ export interface AuthUser {
   uid: string;
   email: string | null;
   displayName: string | null;
-  role?: 'admin' | 'employee';
+  role?: 'manager' | 'employee';
 }
 
 // Sign in with email and password
@@ -33,7 +33,7 @@ export const signIn = async (email: string, password: string) => {
 };
 
 // Create new user account
-export const signUp = async (email: string, password: string, displayName: string, role: 'admin' | 'employee' = 'employee') => {
+export const signUp = async (email: string, password: string, displayName: string, role: 'manager' | 'employee' = 'employee') => {
   try {
     console.log('Creating new Firebase user:', email);
     const userCredential = await createUserWithEmailAndPassword(auth, email, password);

@@ -28,30 +28,33 @@ const Sidebar: React.FC<SidebarProps> = ({ activeView, onViewChange }) => {
   const { user, logout } = useAuth();
   const { notifications } = useData();
 
-  const unreadNotifications = notifications.filter(n => !n.isRead).length;
+const unreadNotifications = notifications.filter(n => 
+  !n.deliveryStatus?.email?.delivered && !n.deliveryStatus?.whatsapp?.delivered
+).length;
+
 
   const adminMenuItems = [
-    { id: 'dashboard', label: 'แดชบอร์ด', icon: Home },
-    { id: 'rooms', label: 'จัดการห้องเช่า', icon: Building2 },
-    { id: 'tenants', label: 'จัดการผู้เช่า', icon: UserCheck },
-    { id: 'payments', label: 'การชำระเงิน', icon: CreditCard },
-    { id: 'receipts', label: 'ใบเสร็จ', icon: Receipt },
-    { id: 'reports', label: 'รายงาน', icon: BarChart3 },
-    { id: 'notifications', label: 'การแจ้งเตือน', icon: Bell, badge: unreadNotifications },
-    { id: 'users', label: 'จัดการผู้ใช้', icon: Users },
-    { id: 'settings', label: 'ตั้งค่าระบบ', icon: Settings },
+    { id: 'dashboard', label: 'ແດັຊບອດ', icon: Home },
+    { id: 'spaces', label: 'ຈັດການຫ້ອງເຊົ່າ', icon: Building2 },
+    { id: 'tenants', label: 'ຈັດການຜູ້ເຊົ່າ', icon: UserCheck },
+    { id: 'payments', label: 'ການຊຳລະເງິນ', icon: CreditCard },
+    { id: 'receipts', label: 'ໃບຮັບເງິນ', icon: Receipt },
+    { id: 'reports', label: 'ລາຍງານ', icon: BarChart3 },
+    { id: 'notifications', label: 'ການແຈ້ງເຕືອນ', icon: Bell, badge: unreadNotifications },
+    { id: 'users', label: 'ຈັດການຜູ້ໃຊ້', icon: Users },
+    { id: 'settings', label: 'ຕັ້ງຄ່າລະບົບ', icon: Settings },
   ];
 
   const employeeMenuItems = [
-    { id: 'dashboard', label: 'แดชบอร์ด', icon: Home },
-    { id: 'collect-payment', label: 'เก็บเงินค่าเช่า', icon: CreditCard },
-    { id: 'receipts', label: 'ใบเสร็จ', icon: Receipt },
-    { id: 'search', label: 'ค้นหาห้อง', icon: Search },
-    { id: 'schedule', label: 'ตารางงาน', icon: Calendar },
-    { id: 'notifications', label: 'การแจ้งเตือน', icon: Bell, badge: unreadNotifications },
+    { id: 'dashboard', label: 'ແດັຊບອດ', icon: Home },
+    { id: 'collect-payment', label: 'ເກັບເງິນຄ່າເຊົ່າ', icon: CreditCard },
+    { id: 'receipts', label: 'ໃບຮັບເງິນ', icon: Receipt },
+    { id: 'search', label: 'ຄົ້ນຫາຫ້ອງ', icon: Search },
+    { id: 'schedule', label: 'ຕາຕະລາງການ', icon: Calendar },
+    { id: 'notifications', label: 'ການແຈ້ງເຕືອນ', icon: Bell, badge: unreadNotifications },
   ];
 
-  const menuItems = user?.role === 'admin' ? adminMenuItems : employeeMenuItems;
+  const menuItems = user?.role === 'manager' ? adminMenuItems : employeeMenuItems;
 
   return (
     <div className="w-64 bg-white border-r border-gray-200 flex flex-col h-full shadow-sm">
@@ -62,19 +65,19 @@ const Sidebar: React.FC<SidebarProps> = ({ activeView, onViewChange }) => {
             <Building2 className="w-6 h-6 text-blue-600" />
           </div>
           <div>
-            <h1 className="text-lg font-bold text-white">ตลาดสดเจริญกรุง</h1>
+            <h1 className="text-lg font-bold text-white">ຕະຫລາດດົງຄໍາຊ້າງ</h1>
             <p className="text-xs text-blue-100">Market Management</p>
           </div>
         </div>
         <div className="bg-blue-500 bg-opacity-30 rounded-lg p-3">
-          <p className="text-sm font-medium text-white">{user?.name}</p>
+          <p className="text-sm font-medium text-white">{user?.displayName}</p>
           <p className="text-xs text-blue-100">{user?.email}</p>
           <span className={`inline-block px-2 py-1 rounded-full text-xs font-medium mt-2 ${
-            user?.role === 'admin' 
+            user?.role === 'manager' 
               ? 'bg-yellow-400 text-yellow-900' 
               : 'bg-green-400 text-green-900'
           }`}>
-            {user?.role === 'admin' ? 'ผู้ดูแลระบบ' : 'พนักงานเก็บเงิน'}
+            {user?.role === 'manager' ? 'ຜູ້ດູແລລະບົບ' : 'ພະນັກງານເກັບເງິນ'}
           </span>
         </div>
       </div>
@@ -113,15 +116,15 @@ const Sidebar: React.FC<SidebarProps> = ({ activeView, onViewChange }) => {
       {/* Footer */}
       <div className="p-4 border-t border-gray-200 bg-gray-50">
         <div className="mb-3 text-xs text-gray-500 text-center">
-          <p>เข้าสู่ระบบล่าสุด</p>
-          <p className="font-medium">{user?.lastLogin?.toLocaleString('th-TH')}</p>
+          <p>ເຂົ້າສູ່ລະບົບຄັ້ງຫຼ້າສຸດ</p>
+          <p className="font-medium">{user?.lastLogin?.toLocaleString('lo-LA')}</p>
         </div>
         <button
           onClick={logout}
           className="w-full flex items-center justify-center px-4 py-3 rounded-lg text-red-600 hover:bg-red-50 transition-colors font-medium"
         >
           <LogOut className="w-5 h-5 mr-2" />
-          ออกจากระบบ
+          ອອກຈາກລະບົບ
         </button>
       </div>
     </div>

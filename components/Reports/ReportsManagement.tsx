@@ -13,7 +13,7 @@ import {
 } from 'lucide-react';
 
 const ReportsManagement: React.FC = () => {
-  const { getDashboardStats, payments, rooms, tenants } = useData();
+  const { getDashboardStats, payments, spaces, tenants } = useData();
   const [dateRange, setDateRange] = useState({
     start: new Date(new Date().getFullYear(), new Date().getMonth(), 1).toISOString().split('T')[0],
     end: new Date().toISOString().split('T')[0]

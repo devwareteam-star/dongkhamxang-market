@@ -12,29 +12,26 @@ import {
 } from 'lucide-react';
 
 const RoomSearch: React.FC = () => {
-  const { rooms, tenants } = useData();
+  const { spaces, tenants } = useData();
   const [searchTerm, setSearchTerm] = useState('');
   const [statusFilter, setStatusFilter] = useState<string>('all');
   const [zoneFilter, setZoneFilter] = useState<string>('all');
 
-  const filteredRooms = rooms.filter(room => {
-    const matchesSearch = room.roomNumber.toLowerCase().includes(searchTerm.toLowerCase()) ||
-                         room.location.toLowerCase().includes(searchTerm.toLowerCase());
+  const filteredRooms = spaces.filter(room => {
+    const matchesSearch = room.spaceCode.toLowerCase().includes(searchTerm.toLowerCase()) ||
+                         room.zone?.toLowerCase().includes(searchTerm.toLowerCase());
     const matchesStatus = statusFilter === 'all' || room.status === statusFilter;
     const matchesZone = zoneFilter === 'all' || room.zone === zoneFilter;
     return matchesSearch && matchesStatus && matchesZone;
   });
 
-  const zones = Array.from(new Set(rooms.map(room => room.zone))).sort();
+  const zones = Array.from(new Set(spaces.map(room => room.zone))).sort();
 
   const getStatusColor = (status: string) => {
     switch (status) {
-      case 'occupied':
-        return 'bg-green-100 text-green-800';
-      case 'vacant':
-        return 'bg-yellow-100 text-yellow-800';
-      case 'maintenance':
-        return 'bg-red-100 text-red-800';
+      case 'ເຊົ່າແລ້ວ': return 'bg-green-100 text-green-800';
+case 'ວ່າງ': return 'bg-yellow-100 text-yellow-800';
+case 'ຊ່ອມແຊມ': return 'bg-red-100 text-red-800';
       default:
         return 'bg-gray-100 text-gray-800';
     }
@@ -43,11 +40,11 @@ const RoomSearch: React.FC = () => {
   const getStatusText = (status: string) => {
     switch (status) {
       case 'occupied':
-        return 'ให้เช่าแล้ว';
+        return 'ເຊົ່າແລ້ວ';
       case 'vacant':
-        return 'ว่าง';
+        return 'ວ່າງ';
       case 'maintenance':
-        return 'ซ่อมแซม';
+        return 'ຊ່ອມແຊມ';
       default:
         return status;
     }
@@ -81,10 +78,10 @@ const RoomSearch: React.FC = () => {
               onChange={(e) => setStatusFilter(e.target.value)}
               className="w-full pl-10 pr-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent appearance-none"
             >
-              <option value="all">สถานะทั้งหมด</option>
-              <option value="vacant">ว่าง</option>
-              <option value="occupied">ให้เช่าแล้ว</option>
-              <option value="maintenance">ซ่อมแซม</option>
+              <option value="all">ສະຖານະ</option>
+              <option value="ວ່າງ">ວ່າງ</option>
+<option value="ເຊົ່າແລ້ວ">ເຊົ່າແລ້ວ</option>
+<option value="ຊ່ອມແຊມ">ຊ່ອມແຊມ</option>
             </select>
           </div>
 
@@ -112,16 +109,18 @@ const RoomSearch: React.FC = () => {
       {/* Results */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
         {filteredRooms.map((room) => {
-          const tenant = tenants.find(t => t.roomId === room.id);
+const tenant = tenants.find(t => 
+  t.allSpace?.includes(room.spaceId) // Use allSpace instead of activeSpaces, and spaceId instead of spaceCode
+);
           
           return (
-            <div key={room.id} className="bg-white rounded-xl shadow-sm border border-gray-200 p-6 hover:shadow-md transition-shadow">
+            <div key={room.spaceId} className="bg-white rounded-xl shadow-sm border border-gray-200 p-6 hover:shadow-md transition-shadow">
               <div className="flex justify-between items-start mb-4">
                 <div>
-                  <h3 className="text-lg font-semibold text-gray-900">ห้อง {room.roomNumber}</h3>
+                  <h3 className="text-lg font-semibold text-gray-900">ห้อง {room.spaceCode}</h3>
                   <p className="text-sm text-gray-600 flex items-center mt-1">
                     <MapPin className="w-3 h-3 mr-1" />
-                    {room.location}
+                    {room.zone}
                   </p>
                 </div>
                 <span className={`px-2 py-1 text-xs font-medium rounded-full ${getStatusColor(room.status)}`}>
@@ -130,25 +129,18 @@ const RoomSearch: React.FC = () => {
               </div>
 
               <div className="space-y-3 mb-4">
-                <div className="flex justify-between text-sm">
-                  <span className="text-gray-600">ขนาด:</span>
-                  <span className="font-medium">{room.size}</span>
-                </div>
                 
                 <div className="grid grid-cols-2 gap-2 text-sm">
-                  <div className="bg-orange-50 p-2 rounded">
-                    <p className="text-orange-600 text-xs">รายวัน</p>
-                    <p className="font-bold text-orange-700">฿{room.dailyRate?.toLocaleString() || '0'}</p>
-                  </div>
+
                   <div className="bg-green-50 p-2 rounded">
                     <p className="text-green-600 text-xs">รายเดือน</p>
-                    <p className="font-bold text-green-700">฿{room.monthlyRate.toLocaleString()}</p>
+                    <p className="font-bold text-green-700">฿{room.baseRentMonthly.toLocaleString()}</p>
                   </div>
                 </div>
                 <div className="mt-2">
                   <div className="bg-blue-50 p-2 rounded">
                     <p className="text-blue-600 text-xs">รายปี</p>
-                    <p className="font-bold text-blue-700">฿{room.yearlyRate.toLocaleString()}</p>
+                    <p className="font-bold text-blue-700">฿{(room.baseRentMonthly * 12).toLocaleString()}</p>
                   </div>
                 </div>
 
@@ -158,17 +150,17 @@ const RoomSearch: React.FC = () => {
                       <Users className="w-4 h-4 text-gray-500" />
                       <span className="text-sm font-medium text-gray-700">ผู้เช่าปัจจุบัน</span>
                     </div>
-                    <p className="text-sm text-gray-900">{tenant.name}</p>
-                    <p className="text-xs text-gray-600">{tenant.phone}</p>
+                    <p className="text-sm text-gray-900">{tenant.tenantName}</p>
+                    <p className="text-xs text-gray-600">{tenant.contact}</p>
                   </div>
                 )}
               </div>
 
-              {room.description && (
-                <div className="text-xs text-gray-600 bg-gray-50 p-2 rounded">
-                  {room.description}
-                </div>
-              )}
+              {room.productCategory && (
+  <div className="text-xs text-gray-600 bg-gray-50 p-2 rounded">
+    ປະເພດສິນຄ້າ: {room.productCategory}
+  </div>
+)}
             </div>
           );
         })}

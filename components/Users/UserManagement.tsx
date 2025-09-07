@@ -80,14 +80,18 @@ const UserManagement: React.FC = () => {
     
     if (confirm('คุณแน่ใจหรือไม่ที่จะลบผู้ใช้นี้?')) {
       // Add notification about user deletion
-      await addNotification({
-        type: 'maintenance_required',
-        title: 'ผู้ใช้ถูกลบ',
-        message: `ผู้ใช้ถูกลบโดย ${user?.name}`,
-        isRead: false,
-        createdAt: new Date(),
-        priority: 'medium'
-      });
+await addNotification({
+  recipientType: 'admin',
+  recipientId: user?.userId || '1',
+  type: 'maintenance_notice',
+  title: 'ຜູ້ໃຊ້ຖືກລົບ',
+  message: `ຜູ້ໃຊ້ຖືກລົບໂດຍ ${user?.displayName}`,
+  channels: ['email'],
+  // Legacy compatibility fields
+  id: `notification-${Date.now()}`,
+  isRead: false,
+  priority: 'medium'
+});
       alert('ลบผู้ใช้เรียบร้อยแล้ว');
     }
   };

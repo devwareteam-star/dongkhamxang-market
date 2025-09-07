@@ -20,7 +20,7 @@ const EmployeeDashboard: React.FC = () => {
   // Get today's collections by this employee
   const today = new Date();
   const todayCollections = payments.filter(p => 
-    p.employeeId === user?.id && 
+    p.paymentId === user?.id && 
     p.paidDate && 
     new Date(p.paidDate).toDateString() === today.toDateString()
   );

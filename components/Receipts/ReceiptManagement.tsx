@@ -12,7 +12,7 @@ import {
 } from 'lucide-react';
 
 const ReceiptManagement: React.FC = () => {
-  const { payments, rooms, tenants } = useData();
+  const { payments, spaces, tenants } = useData();
   const [searchTerm, setSearchTerm] = useState('');
   const [dateFilter, setDateFilter] = useState('');
 
@@ -20,12 +20,12 @@ const ReceiptManagement: React.FC = () => {
   const receipts = payments.filter(p => p.status === 'paid' && p.receiptNumber);
 
   const filteredReceipts = receipts.filter(receipt => {
-    const room = rooms.find(r => r.id === receipt.roomId);
+    const room = spaces.find(r => r.spaceId === receipt.roomId);
     const tenant = tenants.find(t => t.id === receipt.tenantId);
     
     const matchesSearch = receipt.receiptNumber?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-                         room?.roomNumber.toLowerCase().includes(searchTerm.toLowerCase()) ||
-                         tenant?.name.toLowerCase().includes(searchTerm.toLowerCase());
+                         room?.spaceType.toLowerCase().includes(searchTerm.toLowerCase()) ||
+                         tenant?.tenantName.toLowerCase().includes(searchTerm.toLowerCase());
     
     const matchesDate = !dateFilter || 
                        (receipt.paidDate && new Date(receipt.paidDate).toISOString().split('T')[0] === dateFilter);
@@ -34,7 +34,7 @@ const ReceiptManagement: React.FC = () => {
   });
 
   const handlePrintReceipt = (receipt: any) => {
-    const room = rooms.find(r => r.id === receipt.roomId);
+    const room = spaces.find(r => r.spaceId === receipt.roomId);
     const tenant = tenants.find(t => t.id === receipt.tenantId);
     
     const printWindow = window.open('', '_blank');
@@ -72,11 +72,11 @@ const ReceiptManagement: React.FC = () => {
               </div>
               <div class="row">
                 <span>ห้องเลขที่:</span>
-                <span>${room?.roomNumber}</span>
+                <span>${room?.spaceCode}</span>
               </div>
               <div class="row">
                 <span>ผู้เช่า:</span>
-                <span>${tenant?.name}</span>
+                <span>${tenant?.tenantName}</span>
               </div>
               <div class="row">
                 <span>ประเภท:</span>
@@ -165,7 +165,7 @@ const ReceiptManagement: React.FC = () => {
             </thead>
             <tbody>
               {filteredReceipts.map((receipt) => {
-                const room = rooms.find(r => r.id === receipt.roomId);
+                const room = spaces.find(r => r.spaceId === receipt.roomId);
                 const tenant = tenants.find(t => t.id === receipt.tenantId);
 
                 return (
@@ -175,8 +175,8 @@ const ReceiptManagement: React.FC = () => {
                     </td>
                     <td className="py-4 px-6">
                       <div>
-                        <div className="font-medium text-gray-900">ห้อง {room?.roomNumber}</div>
-                        <div className="text-sm text-gray-600">{tenant?.name}</div>
+                        <div className="font-medium text-gray-900">ห้อง {room?.spaceType}</div>
+                        <div className="text-sm text-gray-600">{tenant?.tenantName}</div>
                       </div>
                     </td>
                     <td className="py-4 px-6">
@@ -187,11 +187,11 @@ const ReceiptManagement: React.FC = () => {
                     </td>
                     <td className="py-4 px-6">
                       <span className={`inline-flex px-2 py-1 text-xs font-medium rounded-full ${
-                        receipt.paymentMethod === 'cash' 
+                        receipt.paymentMethod === 'ເງິນສົດ' 
                           ? 'bg-green-100 text-green-800' 
                           : 'bg-blue-100 text-blue-800'
                       }`}>
-                        {receipt.paymentMethod === 'cash' ? 'เงินสด' : 'โอนเงิน'}
+                        {receipt.paymentMethod === 'ເງິນສົດ' ? 'ໂອນເງິນ' : 'โอนเงิน'}
                       </span>
                     </td>
                     <td className="py-4 px-6">

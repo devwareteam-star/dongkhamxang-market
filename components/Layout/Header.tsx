@@ -18,7 +18,10 @@ const Header: React.FC<HeaderProps> = ({ onMenuToggle, isMobileMenuOpen }) => {
   const [showProfile, setShowProfile] = useState(false);
   
   const stats = getDashboardStats();
-  const unreadNotifications = notifications.filter(n => !n.isRead);
+  
+  const unreadNotifications = notifications.filter(n => 
+  !n.deliveryStatus?.email?.delivered && !n.deliveryStatus?.whatsapp?.delivered
+);
 
   return (
     <header className="bg-white border-b border-gray-200 px-4 lg:px-6 py-4 shadow-sm">
@@ -42,19 +45,20 @@ const Header: React.FC<HeaderProps> = ({ onMenuToggle, isMobileMenuOpen }) => {
           {/* Quick Stats */}
           <div className="hidden md:flex items-center space-x-6 text-sm">
             <div className="text-center">
-              <p className="text-gray-500 text-xs">รายได้วันนี้</p>
+              <p className="text-gray-500 text-xs">ລາຍໄດ້ມື້ນີ້</p>
               <p className="font-bold text-green-600">
-                ฿{stats.todayRevenue.toLocaleString()}
+                ₭{stats.todayRevenue.toLocaleString()}
               </p>
             </div>
             <div className="text-center">
-              <p className="text-gray-500 text-xs">ค้างชำระ</p>
+              <p className="text-gray-500 text-xs">ຄ້າງຊຳລະ</p>
               <p className="font-bold text-red-600">
-                {stats.overduePayments} ห้อง
+                {stats.overduePayments} ພື້ນທີ່
+
               </p>
             </div>
             <div className="text-center">
-              <p className="text-gray-500 text-xs">อัตราเช่า</p>
+              <p className="text-gray-500 text-xs">ອັດຕາເຊົ່າ</p>
               <p className="font-bold text-blue-600">
                 {stats.occupancyRate.toFixed(1)}%
               </p>
@@ -85,21 +89,20 @@ const Header: React.FC<HeaderProps> = ({ onMenuToggle, isMobileMenuOpen }) => {
                 <div className="max-h-96 overflow-y-auto">
                   {notifications.slice(0, 10).map((notification) => (
                     <div 
-                      key={notification.id}
+                    key={notification.notificationId}
                       className={`p-4 border-b border-gray-100 hover:bg-gray-50 ${
-                        !notification.isRead ? 'bg-blue-50' : ''
+                        !notification.deliveryStatus?.email?.delivered ? 'bg-blue-50' : ''
                       }`}
                     >
                       <div className="flex items-start space-x-3">
                         <div className={`w-2 h-2 rounded-full mt-2 ${
-                          notification.priority === 'high' ? 'bg-red-500' :
-                          notification.priority === 'medium' ? 'bg-yellow-500' : 'bg-blue-500'
+                          notification.type === 'payment_reminder' ? 'bg-red-500' : 'bg-blue-500'
                         }`} />
                         <div className="flex-1">
                           <p className="text-sm font-medium text-gray-900">{notification.title}</p>
                           <p className="text-sm text-gray-600">{notification.message}</p>
                           <p className="text-xs text-gray-400 mt-1">
-                            {notification.createdAt.toLocaleString('th-TH')}
+                            {notification.createdAt.toLocaleString('lo-LA')}
                           </p>
                         </div>
                       </div>
@@ -125,8 +128,8 @@ const Header: React.FC<HeaderProps> = ({ onMenuToggle, isMobileMenuOpen }) => {
                 <User className="w-4 h-4 text-white" />
               </div>
               <div className="hidden sm:block text-left">
-                <p className="text-sm font-medium text-gray-900">{user?.name}</p>
-                <p className="text-xs text-gray-500">{user?.role === 'admin' ? 'ผู้ดูแลระบบ' : 'พนักงาน'}</p>
+                <p className="text-sm font-medium text-gray-900">{user?.displayName}</p>
+                <p className="text-xs text-gray-500">{user?.role === 'manager' ? 'ຜູ້ຄຸ້ມຄອງ' : 'ພະນັກງານ'}</p>
               </div>
             </button>
             
@@ -141,7 +144,7 @@ const Header: React.FC<HeaderProps> = ({ onMenuToggle, isMobileMenuOpen }) => {
                     <div>
                       <p className="font-medium text-gray-900">{user?.name}</p>
                       <p className="text-sm text-gray-600">{user?.email}</p>
-                      <p className="text-xs text-gray-500">{user?.phone}</p>
+                      <p className="text-xs text-gray-500">{user?.phoneNumber}</p>
                     </div>
                   </div>
                 </div>

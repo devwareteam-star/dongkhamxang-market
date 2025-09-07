@@ -31,11 +31,11 @@ const LoginForm: React.FC = () => {
     }
   };
 
-  const handleDemoLogin = (demoUsername: string) => {
-    setUsername(demoUsername);
-    setPassword('password123');
-    setSelectedDemo(demoUsername);
-  };
+ const handleDemoLogin = (demoUsername: string) => {
+  setUsername(demoUsername);
+  setPassword(demoUsername === 'admin' ? 'admin123' : 'staff123');
+  setSelectedDemo(demoUsername);
+};
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-blue-50 via-white to-indigo-50 flex items-center justify-center p-4">
@@ -136,7 +136,7 @@ const LoginForm: React.FC = () => {
               <div className="flex items-center justify-between">
                 <div className="text-left">
                   <p className="font-medium text-purple-700">ผู้ดูแลระบบ</p>
-                  <p className="text-sm text-purple-600">admin / password123</p>
+                  <p className="text-sm text-purple-600">admin / admin123</p>
                 </div>
                 <div className="w-8 h-8 bg-purple-100 rounded-full flex items-center justify-center">
                   <User className="w-4 h-4 text-purple-600" />
@@ -145,9 +145,9 @@ const LoginForm: React.FC = () => {
             </button>
             
             <button
-              onClick={() => handleDemoLogin('employee1')}
+              onClick={() => handleDemoLogin('staff')}
               className={`w-full p-3 rounded-lg border-2 transition-all ${
-                selectedDemo === 'employee1'
+                selectedDemo === 'staff'
                   ? 'border-blue-500 bg-blue-50'
                   : 'border-blue-200 bg-white hover:border-blue-300 hover:bg-blue-50'
               }`}
@@ -155,7 +155,7 @@ const LoginForm: React.FC = () => {
               <div className="flex items-center justify-between">
                 <div className="text-left">
                   <p className="font-medium text-blue-700">พนักงานเก็บเงิน</p>
-                  <p className="text-sm text-blue-600">employee1 / password123</p>
+                  <p className="text-sm text-blue-600">staff / staff123</p>
                 </div>
                 <div className="w-8 h-8 bg-blue-100 rounded-full flex items-center justify-center">
                   <User className="w-4 h-4 text-blue-600" />

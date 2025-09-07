@@ -19,7 +19,7 @@ const AdminDashboard: React.FC = () => {
 
   const statCards = [
     {
-      title: 'ห้องทั้งหมด',
+      title: 'ຫ້ອງທັງໝົດ',
       value: stats.totalRooms,
       icon: Building2,
       color: 'bg-blue-500',
@@ -27,7 +27,7 @@ const AdminDashboard: React.FC = () => {
       textColor: 'text-blue-700'
     },
     {
-      title: 'ห้องที่ให้เช่าแล้ว',
+      title: 'ຫ້ອງທີ່ໃຫ້ເຊົ່າແລ້ວ',
       value: stats.occupiedRooms,
       icon: Users,
       color: 'bg-green-500',
@@ -35,7 +35,7 @@ const AdminDashboard: React.FC = () => {
       textColor: 'text-green-700'
     },
     {
-      title: 'ห้องว่าง',
+      title: 'ຫ້ອງວ່າງ',
       value: stats.vacantRooms,
       icon: Building2,
       color: 'bg-yellow-500',
@@ -43,8 +43,8 @@ const AdminDashboard: React.FC = () => {
       textColor: 'text-yellow-700'
     },
     {
-      title: 'รายได้วันนี้',
-      value: `฿${stats.todayRevenue.toLocaleString()}`,
+      title: 'ລາຍໄດ້ມື້ນີ້',
+      value: `₭${stats.todayRevenue.toLocaleString()}`,
       icon: DollarSign,
       color: 'bg-purple-500',
       bgColor: 'bg-purple-50',
@@ -56,8 +56,8 @@ const AdminDashboard: React.FC = () => {
     <div className="space-y-6">
       <div className="flex justify-between items-center">
         <div>
-          <h1 className="text-3xl font-bold text-gray-900">แดshบอร์ดผู้ดูแลระบบ</h1>
-          <p className="text-gray-600 mt-1">ภาพรวมการดำเนินงานตลาด</p>
+          <h1 className="text-3xl font-bold text-gray-900">ແດັຊບອດຜູ້ດູແລລະບົບ</h1>
+          <p className="text-gray-600 mt-1">ພາບລວມການດຳເນີນງານຕະຫລາດ</p>
         </div>
       </div>
 
@@ -86,50 +86,50 @@ const AdminDashboard: React.FC = () => {
       {/* Quick Actions */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
         <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
-          <h3 className="text-lg font-semibold text-gray-900 mb-4">สถานะการชำระเงิน</h3>
+          <h3 className="text-lg font-semibold text-gray-900 mb-4">ສະຖານະການຊຳລະເງິນ</h3>
           <div className="space-y-4">
             <div className="flex items-center justify-between p-4 bg-red-50 rounded-lg">
               <div className="flex items-center space-x-3">
                 <AlertTriangle className="w-5 h-5 text-red-600" />
-                <span className="text-red-800 font-medium">เกินกำหนดชำระ</span>
+                <span className="text-red-800 font-medium">ເກີນກຳນົດຊຳລະ</span>
               </div>
-              <span className="text-red-600 font-bold">{stats.overduePayments} ห้อง</span>
+              <span className="text-red-600 font-bold">{stats.overduePayments} ຫ້ອງ</span>
             </div>
             <div className="flex items-center justify-between p-4 bg-yellow-50 rounded-lg">
               <div className="flex items-center space-x-3">
                 <Clock className="w-5 h-5 text-yellow-600" />
-                <span className="text-yellow-800 font-medium">รอชำระ</span>
+                <span className="text-yellow-800 font-medium">ລໍຊຳລະ</span>
               </div>
-              <span className="text-yellow-600 font-bold">{stats.pendingPayments} ห้อง</span>
+              <span className="text-yellow-600 font-bold">{stats.pendingPayments} ຫ້ອງ</span>
             </div>
             <div className="flex items-center justify-between p-4 bg-green-50 rounded-lg">
               <div className="flex items-center space-x-3">
                 <CheckCircle className="w-5 h-5 text-green-600" />
-                <span className="text-green-800 font-medium">เก็บเงินวันนี้</span>
+                <span className="text-green-800 font-medium">ເກັບເງິນມື້ນີ້</span>
               </div>
-              <span className="text-green-600 font-bold">{stats.todayCollections} รายการ</span>
+              <span className="text-green-600 font-bold">{stats.todayCollections} ລາຍການ</span>
             </div>
           </div>
         </div>
 
         <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
-          <h3 className="text-lg font-semibold text-gray-900 mb-4">สถิติการดำเนินงาน</h3>
+          <h3 className="text-lg font-semibold text-gray-900 mb-4">ສະຖິຕິການດຳເນີນງານ</h3>
           <div className="space-y-4">
             <div className="flex justify-between items-center">
-              <span className="text-gray-600">อัตราการเช่า</span>
+              <span className="text-gray-600">ອັດຕາການເຊົ່າ</span>
               <span className="font-bold text-blue-600">{stats.occupancyRate.toFixed(1)}%</span>
             </div>
             <div className="flex justify-between items-center">
-              <span className="text-gray-600">อัตราการเก็บเงิน</span>
+              <span className="text-gray-600">ອັດຕາການເກັບເງິນ</span>
               <span className="font-bold text-green-600">{stats.collectionRate.toFixed(1)}%</span>
             </div>
             <div className="flex justify-between items-center">
-              <span className="text-gray-600">รายได้เดือนนี้</span>
-              <span className="font-bold text-purple-600">฿{stats.monthlyRevenue.toLocaleString()}</span>
+              <span className="text-gray-600">ລາຍໄດ້ເດືອນນີ້</span>
+              <span className="font-bold text-purple-600">₭{stats.monthlyRevenue.toLocaleString()}</span>
             </div>
             <div className="flex justify-between items-center">
-              <span className="text-gray-600">รายได้ปีนี้</span>
-              <span className="font-bold text-indigo-600">฿{stats.yearlyRevenue.toLocaleString()}</span>
+              <span className="text-gray-600">ລາຍໄດ້ປີນີ້</span>
+              <span className="font-bold text-indigo-600">₭{stats.yearlyRevenue.toLocaleString()}</span>
             </div>
           </div>
         </div>

@@ -2,7 +2,7 @@
 
 import React, { useState } from 'react';
 import { useData } from '@/lib/contexts/DataContext';
-import { useAuth } from '@/lib/contexts/AuthContext'; // Add this line
+import { useAuth } from '@/lib/contexts/AuthContext';
 import { 
   Settings, 
   Building2, 
@@ -26,29 +26,39 @@ const SettingsManagement: React.FC = () => {
       updateSettings(formData);
       
       // Add notification about settings change
-      await addNotification({
-        type: 'maintenance_required',
-        title: 'การตั้งค่าระบบถูกอัปเดต',
-        message: `การตั้งค่าระบบถูกอัปเดตโดย ${user?.name}`,
-        isRead: false,
-        createdAt: new Date(),
-        priority: 'low'
-      });
+      // await addNotification({
+      //   recipientType: 'admin',
+      //   recipientId: user?.userId || '1',
+      //   type: 'maintenance_notice',
+      //   title: 'ການຕັ້ງຄ່າລະບົບຖືກອັບເດດ',
+      //   message: `ການຕັ້ງຄ່າລະບົບຖືກອັບເດດໂດຍ ${user?.displayName}`,
+      //   channels: ['email']
+      // });
       
-      alert('การตั้งค่าถูกบันทึกแล้ว');
+      alert('ການຕັ້ງຄ່າຖືກບັນທຶກແລ້ວ');
     } catch (error) {
-      alert('เกิดข้อผิดพลาดในการบันทึกการตั้งค่า');
+      alert('ເກີດຂໍ້ຜິດພາດໃນການບັນທຶກການຕັ້ງຄ່າ');
     } finally {
       setIsSubmitting(false);
     }
   };
 
+  const handleInputChange = (section: string, field: string, value: any) => {
+    setFormData(prev => ({
+      ...prev,
+      [section]: {
+        ...prev[section as keyof typeof prev],
+        [field]: value
+      }
+    }));
+  };
+
   const tabs = [
-    { id: 'market', label: 'ข้อมูลตลาด', icon: Building2 },
-    { id: 'rates', label: 'อัตราค่าเช่า', icon: DollarSign },
-    { id: 'notifications', label: 'การแจ้งเตือน', icon: Bell },
-    { id: 'receipt', label: 'ใบเสร็จ', icon: Receipt },
-    { id: 'security', label: 'ความปลอดภัย', icon: Shield }
+    { id: 'market', label: 'ຂໍ້ມູນຕະຫຼາດ', icon: Building2 },
+    { id: 'rates', label: 'ອັດຕາຄ່າເຊົ່າ', icon: DollarSign },
+    { id: 'notifications', label: 'ການແຈ້ງເຕືອນ', icon: Bell },
+    { id: 'receipt', label: 'ໃບເສັດ', icon: Receipt },
+    { id: 'security', label: 'ຄວາມປອດໄພ', icon: Shield }
   ];
 
   const renderTabContent = () => {
@@ -56,45 +66,50 @@ const SettingsManagement: React.FC = () => {
       case 'market':
         return (
           <div className="space-y-6">
-            <h3 className="text-lg font-semibold text-gray-900">ข้อมูลตลาด</h3>
+            <h3 className="text-lg font-semibold text-gray-900">ຂໍ້ມູນຕະຫຼາດ</h3>
             <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">ชื่อตลาด</label>
+                <label className="block text-sm font-medium text-gray-700 mb-2">ຊື່ຕະຫຼາດ</label>
                 <input
                   type="text"
-                  defaultValue={settings.marketInfo.name}
+                  value={formData.marketInfo.name}
+                  onChange={(e) => handleInputChange('marketInfo', 'name', e.target.value)}
                   className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
                 />
               </div>
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">เบอร์โทรศัพท์</label>
+                <label className="block text-sm font-medium text-gray-700 mb-2">ເບີໂທລະສັບ</label>
                 <input
                   type="text"
-                  defaultValue={settings.marketInfo.phone}
+                  value={formData.marketInfo.phone}
+                  onChange={(e) => handleInputChange('marketInfo', 'phone', e.target.value)}
                   className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
                 />
               </div>
               <div className="md:col-span-2">
-                <label className="block text-sm font-medium text-gray-700 mb-2">ที่อยู่</label>
+                <label className="block text-sm font-medium text-gray-700 mb-2">ທີ່ຢູ່</label>
                 <textarea
-                  defaultValue={settings.marketInfo.address}
+                  value={formData.marketInfo.address}
+                  onChange={(e) => handleInputChange('marketInfo', 'address', e.target.value)}
                   rows={3}
                   className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
                 />
               </div>
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">อีเมล</label>
+                <label className="block text-sm font-medium text-gray-700 mb-2">ອີເມລ</label>
                 <input
                   type="email"
-                  defaultValue={settings.marketInfo.email}
+                  value={formData.marketInfo.email}
+                  onChange={(e) => handleInputChange('marketInfo', 'email', e.target.value)}
                   className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
                 />
               </div>
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">เลขประจำตัวผู้เสียภาษี</label>
+                <label className="block text-sm font-medium text-gray-700 mb-2">ເລກປະຈຳຕົວຜູ້ເສັຽພາສີ</label>
                 <input
                   type="text"
-                  defaultValue={settings.marketInfo.taxId}
+                  value={formData.marketInfo.taxId || ''}
+                  onChange={(e) => handleInputChange('marketInfo', 'taxId', e.target.value)}
                   className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
                 />
               </div>
@@ -105,21 +120,32 @@ const SettingsManagement: React.FC = () => {
       case 'rates':
         return (
           <div className="space-y-6">
-            <h3 className="text-lg font-semibold text-gray-900">อัตราค่าเช่าเริ่มต้น</h3>
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+            <h3 className="text-lg font-semibold text-gray-900">ອັດຕາຄ່າເຊົ່າເລີ່ມຕົ້ນ</h3>
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">ค่าเช่ารายเดือน (บาท)</label>
+                <label className="block text-sm font-medium text-gray-700 mb-2">ຄ່າເຊົ່າລາຍວັນ (KIP)</label>
                 <input
                   type="number"
-                  defaultValue={settings.defaultRates.monthlyRate}
+                  value={formData.defaultRates.dailyRate}
+                  onChange={(e) => handleInputChange('defaultRates', 'dailyRate', parseInt(e.target.value))}
                   className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
                 />
               </div>
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">ค่าเช่ารายปี (บาท)</label>
+                <label className="block text-sm font-medium text-gray-700 mb-2">ຄ່າເຊົ່າລາຍເດືອນ (KIP)</label>
                 <input
                   type="number"
-                  defaultValue={settings.defaultRates.yearlyRate}
+                  value={formData.defaultRates.monthlyRate}
+                  onChange={(e) => handleInputChange('defaultRates', 'monthlyRate', parseInt(e.target.value))}
+                  className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                />
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">ຄ່າເຊົ່າລາຍປີ (KIP)</label>
+                <input
+                  type="number"
+                  value={formData.defaultRates.yearlyRate}
+                  onChange={(e) => handleInputChange('defaultRates', 'yearlyRate', parseInt(e.target.value))}
                   className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
                 />
               </div>
@@ -130,44 +156,48 @@ const SettingsManagement: React.FC = () => {
       case 'notifications':
         return (
           <div className="space-y-6">
-            <h3 className="text-lg font-semibold text-gray-900">การแจ้งเตือน</h3>
+            <h3 className="text-lg font-semibold text-gray-900">ການແຈ້ງເຕືອນ</h3>
             <div className="space-y-4">
               <div className="flex items-center justify-between">
                 <div>
-                  <p className="font-medium text-gray-900">แจ้งเตือนทางอีเมล</p>
-                  <p className="text-sm text-gray-600">ส่งการแจ้งเตือนผ่านอีเมล</p>
+                  <p className="font-medium text-gray-900">ແຈ້ງເຕືອນທາງອີເມລ</p>
+                  <p className="text-sm text-gray-600">ສົ່ງການແຈ້ງເຕືອນຜ່ານອີເມລ</p>
                 </div>
                 <input
                   type="checkbox"
-                  defaultChecked={settings.notifications.enableEmail}
+                  checked={formData.notifications.enableEmail}
+                  onChange={(e) => handleInputChange('notifications', 'enableEmail', e.target.checked)}
                   className="w-4 h-4 text-blue-600 border-gray-300 rounded focus:ring-blue-500"
                 />
               </div>
               <div className="flex items-center justify-between">
                 <div>
-                  <p className="font-medium text-gray-900">แจ้งเตือนทาง SMS</p>
-                  <p className="text-sm text-gray-600">ส่งการแจ้งเตือนผ่าน SMS</p>
+                  <p className="font-medium text-gray-900">ແຈ້ງເຕືອນທາງ SMS</p>
+                  <p className="text-sm text-gray-600">ສົ່ງການແຈ້ງເຕືອນຜ່ານ SMS</p>
                 </div>
                 <input
                   type="checkbox"
-                  defaultChecked={settings.notifications.enableSMS}
+                  checked={formData.notifications.enableSMS}
+                  onChange={(e) => handleInputChange('notifications', 'enableSMS', e.target.checked)}
                   className="w-4 h-4 text-blue-600 border-gray-300 rounded focus:ring-blue-500"
                 />
               </div>
               <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-2">แจ้งเตือนก่อนครบกำหนด (วัน)</label>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">ແຈ້ງເຕືອນກ່ອນຄົບກຳນົດ (ວັນ)</label>
                   <input
                     type="number"
-                    defaultValue={settings.notifications.reminderDays}
+                    value={formData.notifications.reminderDays}
+                    onChange={(e) => handleInputChange('notifications', 'reminderDays', parseInt(e.target.value))}
                     className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
                   />
                 </div>
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-2">แจ้งเตือนเกินกำหนด (วัน)</label>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">ແຈ້ງເຕືອນເກີນກຳນົດ (ວັນ)</label>
                   <input
                     type="number"
-                    defaultValue={settings.notifications.overdueReminderDays}
+                    value={formData.notifications.overdueReminderDays}
+                    onChange={(e) => handleInputChange('notifications', 'overdueReminderDays', parseInt(e.target.value))}
                     className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
                   />
                 </div>
@@ -179,34 +209,49 @@ const SettingsManagement: React.FC = () => {
       case 'receipt':
         return (
           <div className="space-y-6">
-            <h3 className="text-lg font-semibold text-gray-900">การตั้งค่าใบเสร็จ</h3>
+            <h3 className="text-lg font-semibold text-gray-900">ການຕັ້ງຄ່າໃບເສັດ</h3>
             <div className="space-y-4">
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">คำนำหน้าเลขใบเสร็จ</label>
+                <label className="block text-sm font-medium text-gray-700 mb-2">ຄຳນຳໜ້າເລກໃບເສັດ</label>
                 <input
                   type="text"
-                  defaultValue={settings.receipt.prefix}
+                  value={formData.receipt.prefix}
+                  onChange={(e) => handleInputChange('receipt', 'prefix', e.target.value)}
                   className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
                 />
               </div>
               <div className="flex items-center justify-between">
                 <div>
-                  <p className="font-medium text-gray-900">รวม QR Code ในใบเสร็จ</p>
-                  <p className="text-sm text-gray-600">แสดง QR Code สำหรับการชำระเงิน</p>
+                  <p className="font-medium text-gray-900">ລວມ QR Code ໃນໃບເສັດ</p>
+                  <p className="text-sm text-gray-600">ສະແດງ QR Code ສຳລັບການຊຳລະເງິນ</p>
                 </div>
                 <input
                   type="checkbox"
-                  defaultChecked={settings.receipt.includeQR}
+                  checked={formData.receipt.includeQR}
+                  onChange={(e) => handleInputChange('receipt', 'includeQR', e.target.checked)}
                   className="w-4 h-4 text-blue-600 border-gray-300 rounded focus:ring-blue-500"
                 />
               </div>
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">ข้อความท้ายใบเสร็จ</label>
+                <label className="block text-sm font-medium text-gray-700 mb-2">ຂໍ້ຄວາມທ້າຍໃບເສັດ</label>
                 <textarea
-                  defaultValue={settings.receipt.footer}
+                  value={formData.receipt.footer}
+                  onChange={(e) => handleInputChange('receipt', 'footer', e.target.value)}
                   rows={3}
                   className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
                 />
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">ແມ່ແບບໃບເສັດ</label>
+                <select
+                  value={formData.receipt.template}
+                  onChange={(e) => handleInputChange('receipt', 'template', e.target.value)}
+                  className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                >
+                  <option value="standard">ມາດຕະຖານ</option>
+                  <option value="modern">ທັນສະໄໝ</option>
+                  <option value="minimal">ງ່າຍ</option>
+                </select>
               </div>
             </div>
           </div>
@@ -215,35 +260,52 @@ const SettingsManagement: React.FC = () => {
       case 'security':
         return (
           <div className="space-y-6">
-            <h3 className="text-lg font-semibold text-gray-900">ความปลอดภัย</h3>
+            <h3 className="text-lg font-semibold text-gray-900">ຄວາມປອດໄພ</h3>
             <div className="space-y-4">
               <div className="flex items-center justify-between">
                 <div>
-                  <p className="font-medium text-gray-900">บังคับเปลี่ยนรหัสผ่าน</p>
-                  <p className="text-sm text-gray-600">บังคับให้ผู้ใช้เปลี่ยนรหัสผ่านเป็นระยะ</p>
+                  <p className="font-medium text-gray-900">ບັງຄັບປ່ຽນລະຫັດຜ່ານ</p>
+                  <p className="text-sm text-gray-600">ບັງຄັບໃຫ້ຜູ້ໃຊ້ປ່ຽນລະຫັດຜ່ານເປັນລະຍະ</p>
                 </div>
                 <input
                   type="checkbox"
-                  defaultChecked={settings.security.requirePasswordChange}
+                  checked={formData.security.requirePasswordChange}
+                  onChange={(e) => handleInputChange('security', 'requirePasswordChange', e.target.checked)}
                   className="w-4 h-4 text-blue-600 border-gray-300 rounded focus:ring-blue-500"
                 />
               </div>
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">ความยาวรหัสผ่านขั้นต่ำ</label>
+                <label className="block text-sm font-medium text-gray-700 mb-2">ຄວາມຍາວລະຫັດຜ່ານຂັ້ນຕ່ຳ</label>
                 <input
                   type="number"
-                  defaultValue={settings.security.passwordMinLength}
+                  value={formData.security.passwordMinLength}
+                  onChange={(e) => handleInputChange('security', 'passwordMinLength', parseInt(e.target.value))}
+                  min="4"
+                  max="50"
                   className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
                 />
               </div>
               <div className="flex items-center justify-between">
                 <div>
-                  <p className="font-medium text-gray-900">การยืนยันตัวตนสองขั้นตอน</p>
-                  <p className="text-sm text-gray-600">เพิ่มความปลอดภัยด้วย 2FA</p>
+                  <p className="font-medium text-gray-900">ການຢັ້ງຢືນຕົວຕົນສອງຂັ້ນຕອນ</p>
+                  <p className="text-sm text-gray-600">ເພີ່ມຄວາມປອດໄພດ້ວຍ 2FA</p>
                 </div>
                 <input
                   type="checkbox"
-                  defaultChecked={settings.security.enableTwoFactor}
+                  checked={formData.security.enableTwoFactor}
+                  onChange={(e) => handleInputChange('security', 'enableTwoFactor', e.target.checked)}
+                  className="w-4 h-4 text-blue-600 border-gray-300 rounded focus:ring-blue-500"
+                />
+              </div>
+              <div className="flex items-center justify-between">
+                <div>
+                  <p className="font-medium text-gray-900">ຈຳກັດ IP Address</p>
+                  <p className="text-sm text-gray-600">ຈຳກັດການເຂົ້າເຖິງຈາກ IP ສະເພາະ</p>
+                </div>
+                <input
+                  type="checkbox"
+                  checked={formData.security.ipRestriction}
+                  onChange={(e) => handleInputChange('security', 'ipRestriction', e.target.checked)}
                   className="w-4 h-4 text-blue-600 border-gray-300 rounded focus:ring-blue-500"
                 />
               </div>
@@ -260,28 +322,37 @@ const SettingsManagement: React.FC = () => {
     <div className="space-y-6">
       <div className="flex justify-between items-center">
         <div>
-          <h1 className="text-3xl font-bold text-gray-900">ตั้งค่าระบบ</h1>
-          <p className="text-gray-600 mt-1">จัดการการตั้งค่าระบบและการกำหนดค่าต่างๆ</p>
+          <h1 className="text-3xl font-bold text-gray-900">ຕັ້ງຄ່າລະບົບ</h1>
+          <p className="text-gray-600 mt-1">ຈັດການການຕັ້ງຄ່າລະບົບແລະການກຳນົດຄ່າຕ່າງໆ</p>
         </div>
         <button
           onClick={handleSave}
           disabled={isSubmitting}
-          className="flex items-center space-x-2 bg-green-600 hover:bg-green-700 text-white px-4 py-2 rounded-lg transition-colors"
+          className="flex items-center space-x-2 bg-green-600 hover:bg-green-700 text-white px-4 py-2 rounded-lg transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
         >
-          <Save className="w-5 h-5" />
-          <span>บันทึกการตั้งค่า</span>
+          {isSubmitting ? (
+            <>
+              <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
+              <span>ກຳລັງບັນທຶກ...</span>
+            </>
+          ) : (
+            <>
+              <Save className="w-5 h-5" />
+              <span>ບັນທຶກການຕັ້ງຄ່າ</span>
+            </>
+          )}
         </button>
       </div>
 
       <div className="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden">
-        <div className="flex border-b border-gray-200">
+        <div className="flex border-b border-gray-200 overflow-x-auto">
           {tabs.map((tab) => {
             const Icon = tab.icon;
             return (
               <button
                 key={tab.id}
                 onClick={() => setActiveTab(tab.id)}
-                className={`flex items-center space-x-2 px-6 py-4 font-medium transition-colors ${
+                className={`flex items-center space-x-2 px-6 py-4 font-medium transition-colors whitespace-nowrap ${
                   activeTab === tab.id
                     ? 'bg-blue-50 text-blue-700 border-b-2 border-blue-500'
                     : 'text-gray-600 hover:text-gray-900 hover:bg-gray-50'

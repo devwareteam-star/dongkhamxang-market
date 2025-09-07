@@ -1,184 +1,294 @@
-'use client';
+"use client";
 
-import React, { useState, useEffect } from 'react';
-import { X, UserCheck, Phone, Mail, MapPin, CreditCard, Calendar, User } from 'lucide-react';
-import { Tenant, Room } from '@/types';
-import { useData } from '@/lib/contexts/DataContext';
+import React, { useState, useEffect } from "react";
+import {
+  X,
+  UserCheck,
+  Phone,
+  MapPin,
+  User,
+  Hash,
+  Calendar,
+  Users,
+} from "lucide-react";
+import { Tenant, TenantFormData, Space, TenantStatusLabels } from "@/types";
+import { useData } from "@/lib/contexts/DataContext";
 
 interface TenantModalProps {
   isOpen: boolean;
   onClose: () => void;
-  onSubmit: (tenantData: Omit<Tenant, 'id'>) => Promise<void>;
+  onSubmit: (tenantData: TenantFormData) => Promise<void>;
   editingTenant?: Tenant | null;
 }
 
-const TenantModal: React.FC<TenantModalProps> = ({ isOpen, onClose, onSubmit, editingTenant }) => {
-  const { rooms, loading } = useData();
-  const [formData, setFormData] = useState({
-    name: '',
-    phone: '',
-    email: '',
-    idCard: '',
-    address: '',
-    roomId: '',
-    contractType: 'monthly' as 'daily' | 'monthly' | 'yearly',
-    deposit: '',
-    emergencyContactName: '',
-    emergencyContactPhone: '',
-    emergencyContactRelation: ''
+// Add this after the interface definitions, before the component
+const generateTenantId = (
+  tenantName: string,
+  existingTenants: Tenant[]
+): string => {
+  // Clean the name: remove special characters, spaces, and convert to lowercase
+  const cleanName = tenantName
+    .toLowerCase()
+    .replace(/[^a-z0-9]/g, "")
+    .substring(0, 8); // Take up to 8 characters for the name part
+
+  // Find existing tenants with the same name prefix
+  const existingIds = existingTenants
+    .map((t) => t.tenantId)
+    .filter((id) => id.startsWith(cleanName))
+    .map((id) => {
+      const numberPart = id.replace(cleanName, "");
+      return parseInt(numberPart) || 0;
+    })
+    .sort((a, b) => a - b);
+
+  // Find the next available number
+  let nextNumber = 1;
+  for (const num of existingIds) {
+    if (num === nextNumber) {
+      nextNumber++;
+    } else {
+      break;
+    }
+  }
+
+  // Format with leading zeros (001, 002, etc.)
+  const paddedNumber = nextNumber.toString().padStart(3, "0");
+  return `${cleanName}${paddedNumber}`;
+};
+
+const TenantModal: React.FC<TenantModalProps> = ({
+  isOpen,
+  onClose,
+  onSubmit,
+  editingTenant,
+}) => {
+  const { spaces, tenants, loading } = useData();
+  const [formData, setFormData] = useState<TenantFormData>({
+    tenantId: "",
+    tenantName: "",
+    allSpace: [],
+    contact: "",
   });
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [errors, setErrors] = useState<Record<string, string>>({});
-
-  // Get available rooms (vacant only)
-  const availableRooms = rooms.filter(room => room.status === 'vacant' || room.status === 'maintenance');
-  
-  console.log('Available rooms:', availableRooms); // Debug log
+  const [spaceTypeFilter, setSpaceTypeFilter] = useState<string>("all");
 
   useEffect(() => {
     if (editingTenant) {
       setFormData({
-        name: editingTenant.name,
-        phone: editingTenant.phone,
-        email: editingTenant.email || '',
-        idCard: editingTenant.idCard,
-        address: editingTenant.address,
-        roomId: editingTenant.roomId,
-        contractType: editingTenant.contractType,
-        deposit: editingTenant.deposit.toString(),
-        emergencyContactName: editingTenant.emergencyContact?.name || '',
-        emergencyContactPhone: editingTenant.emergencyContact?.phone || '',
-        emergencyContactRelation: editingTenant.emergencyContact?.relation || ''
+        tenantId: editingTenant.tenantId,
+        tenantName: editingTenant.tenantName,
+        allSpace: editingTenant.allSpace || [],
+        contact: editingTenant.contact || "",
       });
     } else {
       setFormData({
-        name: '',
-        phone: '',
-        email: '',
-        idCard: '',
-        address: '',
-        roomId: '',
-        contractType: 'monthly',
-        deposit: '',
-        emergencyContactName: '',
-        emergencyContactPhone: '',
-        emergencyContactRelation: ''
+        tenantId: "",
+        tenantName: "",
+        allSpace: [],
+        contact: "",
       });
     }
     setErrors({});
   }, [editingTenant, isOpen]);
 
+  const handleSpaceToggle = (spaceId: string) => {
+    console.log("Toggling space:", spaceId);
+    console.log("Current selected:", formData.allSpace);
+
+    setFormData((prev) => ({
+      ...prev,
+      allSpace: (prev.allSpace || []).includes(spaceId)
+        ? (prev.allSpace || []).filter((id) => id !== spaceId)
+        : [...(prev.allSpace || []), spaceId],
+    }));
+  };
+
+  const calculateTotalRent = () => {
+    return (formData.allSpace || []).reduce((total, spaceId) => {
+      const space = spaces.find((s) => s.id === spaceId); // Change from s.spaceId to s.id
+      return total + (space ? space.baseRentMonthly : 0);
+    }, 0);
+  };
+
+  const getFilteredSpaces = () => {
+    const availableSpaces = spaces.filter((space) => {
+      // Show vacant spaces
+      if (space.status === "ວ່າງ") return true;
+
+      // Show spaces currently assigned to this tenant (when editing)
+      if (editingTenant && (formData.allSpace || []).includes(space.id))
+        return true; // Change from space.spaceId to space.id
+
+      return false;
+    });
+
+    if (spaceTypeFilter === "all") {
+      return availableSpaces;
+    }
+
+    return availableSpaces.filter(
+      (space) => space.spaceType === spaceTypeFilter
+    );
+  };
+
+  // Add this validation function inside the TenantModal component
+const validateSpaceSelection = (): string[] => {
+  const unavailableSpaces: string[] = [];
+
+  formData.allSpace.forEach((spaceId) => {
+    const space = spaces.find((s) => s.id === spaceId);
+
+    if (!space) {
+      unavailableSpaces.push(spaceId);
+      return;
+    }
+
+    // For UPDATE: Skip validation if this space was already assigned to this tenant
+    if (editingTenant && editingTenant.allSpace?.includes(spaceId)) {
+      return; // This space was already theirs, so it's valid
+    }
+
+    // Check if space is occupied by another tenant (only for new assignments)
+    if (
+      space.status === "ເຊົ່າແລ້ວ" &&
+      space.currentTenantId &&
+      space.currentTenantId !== editingTenant?.tenantId
+    ) {
+      unavailableSpaces.push(space.spaceCode);
+    }
+
+    // Check if space is under maintenance
+    if (space.status === "ຊ່ອມແຊມ") {
+      unavailableSpaces.push(space.spaceCode);
+    }
+  });
+
+  return unavailableSpaces;
+};
+
   const validateForm = () => {
     const newErrors: Record<string, string> = {};
 
-    if (!formData.name.trim()) {
-      newErrors.name = 'กรุณากรอกชื่อผู้เช่า';
+    // Remove tenantId validation for new tenants since it's auto-generated
+    if (!formData.tenantName.trim()) {
+      newErrors.tenantName = "ກະລຸນາຕື່ມຊື່ທຸລະກິດ/ຮ້ານຄ້າ";
     }
-    if (!formData.phone.trim()) {
-      newErrors.phone = 'กรุณากรอกเบอร์โทรศัพท์';
-    } else if (!/^[0-9-]+$/.test(formData.phone)) {
-      newErrors.phone = 'เบอร์โทรศัพท์ไม่ถูกต้อง';
+
+    if (!formData.contact?.trim()) {
+      newErrors.contact = "ກະລຸນາຕື່ມຂໍ້ມູນຕິດຕໍ່";
     }
-    if (formData.email && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(formData.email)) {
-      newErrors.email = 'อีเมลไม่ถูกต้อง';
-    }
-    if (!formData.idCard.trim()) {
-      newErrors.idCard = 'กรุณากรอกเลขบัตรประชาชน';
-    } else if (!/^[0-9]{13}$/.test(formData.idCard.replace(/[^0-9]/g, ''))) {
-      newErrors.idCard = 'เลขบัตรประชาชนต้องมี 13 หลัก';
-    }
-    if (!formData.address.trim()) {
-      newErrors.address = 'กรุณากรอกที่อยู่';
-    }
-    if (!formData.roomId) {
-      newErrors.roomId = 'กรุณาเลือกห้องเช่า';
-    }
-    if (!formData.deposit || parseFloat(formData.deposit) <= 0) {
-      newErrors.deposit = 'กรุณากรอกจำนวนเงินมัดจำที่ถูกต้อง';
+
+    const unavailableSpaces = validateSpaceSelection();
+    if (unavailableSpaces.length > 0) {
+      newErrors.spaces = `ພື້ນທີ່ ${unavailableSpaces.join(
+        ", "
+      )} ບໍ່ສາມາດເລືອກໄດ້ ເນື່ອງຈາກຖືກເຊົ່າແລ້ວຫຼືກຳລັງສ້ອມແປງ`;
     }
 
     setErrors(newErrors);
     return Object.keys(newErrors).length === 0;
   };
 
+  const renderSpaceCheckbox = (space: Space) => {
+    const isUnavailable = space.status === 'ເຊົ່າແລ້ວ' && 
+                       space.currentTenantId && 
+                       space.currentTenantId !== editingTenant?.tenantId;
+  
+  const isInMaintenance = space.status === 'ຊ່ອມແຊມ';
+ return (
+    <label 
+      key={space.id} // Change from space.spaceId to space.id
+      className={`flex items-center space-x-3 p-2 rounded transition-colors ${
+        isUnavailable || isInMaintenance 
+          ? 'bg-red-50 opacity-60 cursor-not-allowed' 
+          : 'hover:bg-gray-50 cursor-pointer'
+      }`}
+    >
+      <input
+        type="checkbox"
+        checked={formData.allSpace.includes(space.id)} // Change from space.spaceId to space.id
+        onChange={() => {
+          if (!isUnavailable && !isInMaintenance) {
+            handleSpaceToggle(space.id); // Change from space.spaceId to space.id
+          }
+        }}
+          disabled={isUnavailable || isInMaintenance}
+          className="w-4 h-4 text-blue-600 border-gray-300 rounded focus:ring-blue-500 disabled:opacity-50"
+        />
+        <div className="flex-1">
+          <div
+            className={`text-sm font-medium ${
+              isUnavailable || isInMaintenance
+                ? "text-gray-400"
+                : "text-gray-900"
+            }`}
+          >
+            {space.spaceCode}
+            {isUnavailable && (
+              <span className="ml-2 text-xs text-red-500">(ເຊົ່າແລ້ວ)</span>
+            )}
+            {isInMaintenance && (
+              <span className="ml-2 text-xs text-orange-500">(ສ້ອມແປງ)</span>
+            )}
+          </div>
+          <div className="text-xs text-gray-500">
+            {space.spaceType} • Zone {space.zone} • ₭
+            {space.baseRentMonthly.toLocaleString()}/ເດືອນ
+          </div>
+        </div>
+      </label>
+    );
+  };
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    
+    console.log('Form submitted with data:', formData);
+  console.log('Editing tenant:', editingTenant);
+
+
     if (!validateForm()) {
+       console.log('Validation failed:', errors);
       return;
     }
 
     setIsSubmitting(true);
     try {
-      const tenantData: Omit<Tenant, 'id'> = {
-        name: formData.name.trim(),
-        phone: formData.phone.trim(),
-        email: formData.email.trim() || undefined,
-        idCard: formData.idCard.trim(),
-        address: formData.address.trim(),
-        roomId: formData.roomId,
-        startDate: new Date(),
-        contractType: formData.contractType,
-        deposit: parseFloat(formData.deposit),
-        isActive: true,
-        emergencyContact: formData.emergencyContactName ? {
-          name: formData.emergencyContactName.trim(),
-          phone: formData.emergencyContactPhone.trim(),
-          relation: formData.emergencyContactRelation.trim()
-        } : undefined
-      };
-
-      await onSubmit(tenantData);
+      await onSubmit({
+        tenantId: formData.tenantId.trim(),
+        tenantName: formData.tenantName.trim(),
+        allSpace: formData.allSpace,
+        contact: formData.contact?.trim(),
+      });
       onClose();
     } catch (error) {
-      console.error('Error submitting tenant:', error);
+      console.error("Error submitting tenant:", error);
+      // Error will be handled by parent component
     } finally {
       setIsSubmitting(false);
     }
   };
 
-  const handleInputChange = (field: string, value: string) => {
-    setFormData(prev => ({ ...prev, [field]: value }));
+  const handleInputChange = (field: keyof TenantFormData, value: any) => {
+    setFormData((prev) => ({ ...prev, [field]: value }));
     if (errors[field]) {
-      setErrors(prev => ({ ...prev, [field]: '' }));
-    }
-    
-    // Auto-suggest deposit when room is selected
-    if (field === 'roomId' && value) {
-      const room = rooms.find(r => r.id === value);
-      console.log('Selected room:', room); // Debug log
-      if (room && !formData.deposit) {
-        const suggestedDeposit = room.monthlyRate ? (room.monthlyRate * 2).toString() : '';
-        console.log('Suggested deposit:', suggestedDeposit); // Debug log
-        setFormData(prev => ({
-          ...prev, 
-          [field]: value,
-          deposit: suggestedDeposit // Suggest 2 months deposit
-        }));
-      } else {
-        setFormData(prev => ({ ...prev, [field]: value }));
-      }
+      setErrors((prev) => ({ ...prev, [field]: "" }));
     }
   };
-
-  const getSelectedRoom = () => {
-    return rooms.find(room => room.id === formData.roomId);
-  };
-
-  const selectedRoom = getSelectedRoom();
 
   if (!isOpen) return null;
 
   return (
     <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
-      <div className="bg-white rounded-xl shadow-xl max-w-4xl w-full max-h-[90vh] overflow-y-auto">
+      <div className="bg-white rounded-xl shadow-xl max-w-2xl w-full max-h-[90vh] overflow-y-auto">
         <div className="flex items-center justify-between p-6 border-b border-gray-200">
           <div className="flex items-center space-x-3">
             <div className="bg-blue-100 p-2 rounded-lg">
               <UserCheck className="w-6 h-6 text-blue-600" />
             </div>
             <h2 className="text-xl font-semibold text-gray-900">
-              {editingTenant ? 'แก้ไขข้อมูลผู้เช่า' : 'เพิ่มผู้เช่าใหม่'}
+              {editingTenant ? "ແກ້ໄຂຂໍ້ມູນຜູ້ເຊົ່າ" : "ເພີ່ມຜູ້ເຊົ່າໃໝ່"}
             </h2>
           </div>
           <button
@@ -190,330 +300,371 @@ const TenantModal: React.FC<TenantModalProps> = ({ isOpen, onClose, onSubmit, ed
         </div>
 
         <form onSubmit={handleSubmit} className="p-6">
-          {/* Personal Information */}
+          {/* Business Information */}
           <div className="mb-8">
             <h3 className="text-lg font-medium text-gray-900 mb-4 flex items-center">
               <User className="w-5 h-5 mr-2 text-blue-600" />
-              ข้อมูลส่วนตัว
+              ຂໍ້ມູນທຸລະກິດ
             </h3>
+
             <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">
-                  ชื่อ-นามสกุล <span className="text-red-500">*</span>
-                </label>
-                <input
-                  type="text"
-                  value={formData.name}
-                  onChange={(e) => handleInputChange('name', e.target.value)}
-                  className={`w-full px-4 py-3 border rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent ${
-                    errors.name ? 'border-red-500' : 'border-gray-300'
-                  }`}
-                  placeholder="กรอกชื่อ-นามสกุล"
-                />
-                {errors.name && (
-                  <p className="text-red-500 text-sm mt-1">{errors.name}</p>
-                )}
-              </div>
-
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">
-                  เบอร์โทรศัพท์ <span className="text-red-500">*</span>
-                </label>
-                <div className="relative">
-                  <Phone className="absolute left-3 top-1/2 transform -translate-y-1/2 w-5 h-5 text-gray-400" />
+              {/* Tenant ID */}
+              {editingTenant ? (
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">
+                    ລະຫັດຜູ້ເຊົ່າ
+                  </label>
                   <input
-                    type="tel"
-                    value={formData.phone}
-                    onChange={(e) => handleInputChange('phone', e.target.value)}
-                    className={`w-full pl-10 pr-4 py-3 border rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent ${
-                      errors.phone ? 'border-red-500' : 'border-gray-300'
-                    }`}
-                    placeholder="081-234-5678"
+                    type="text"
+                    value={formData.tenantId}
+                    disabled
+                    className="w-full px-4 py-3 border border-gray-300 bg-gray-100 rounded-lg"
                   />
                 </div>
-                {errors.phone && (
-                  <p className="text-red-500 text-sm mt-1">{errors.phone}</p>
-                )}
-              </div>
-
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">
-                  อีเมล
-                </label>
-                <div className="relative">
-                  <Mail className="absolute left-3 top-1/2 transform -translate-y-1/2 w-5 h-5 text-gray-400" />
+              ) : (
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">
+                    ລະຫັດຜູ້ເຊົ່າ (ສ້າງອັດຕະໂນມັດ)
+                  </label>
                   <input
-                    type="email"
-                    value={formData.email}
-                    onChange={(e) => handleInputChange('email', e.target.value)}
-                    className={`w-full pl-10 pr-4 py-3 border rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent ${
-                      errors.email ? 'border-red-500' : 'border-gray-300'
-                    }`}
-                    placeholder="example@email.com"
+                    type="text"
+                    value={formData.tenantId}
+                    disabled
+                    className="w-full px-4 py-3 border border-gray-300 bg-gray-100 rounded-lg"
+                    placeholder="ຈະສ້າງອັດຕະໂນມັດຈາກຊື່ທຸລະກິດ"
                   />
                 </div>
-                {errors.email && (
-                  <p className="text-red-500 text-sm mt-1">{errors.email}</p>
-                )}
-              </div>
-
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">
-                  เลขบัตรประชาชน <span className="text-red-500">*</span>
-                </label>
-                <input
-                  type="text"
-                  value={formData.idCard}
-                  onChange={(e) => handleInputChange('idCard', e.target.value)}
-                  className={`w-full px-4 py-3 border rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent ${
-                    errors.idCard ? 'border-red-500' : 'border-gray-300'
-                  }`}
-                  placeholder="1-2345-67890-12-3"
-                  maxLength={17}
-                />
-                {errors.idCard && (
-                  <p className="text-red-500 text-sm mt-1">{errors.idCard}</p>
-                )}
-              </div>
-            </div>
-
-            <div className="mt-6">
-              <label className="block text-sm font-medium text-gray-700 mb-2">
-                ที่อยู่ <span className="text-red-500">*</span>
-              </label>
-              <div className="relative">
-                <MapPin className="absolute left-3 top-3 w-5 h-5 text-gray-400" />
-                <textarea
-                  value={formData.address}
-                  onChange={(e) => handleInputChange('address', e.target.value)}
-                  className={`w-full pl-10 pr-4 py-3 border rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent ${
-                    errors.address ? 'border-red-500' : 'border-gray-300'
-                  }`}
-                  rows={3}
-                  placeholder="กรอกที่อยู่ปัจจุบัน"
-                />
-              </div>
-              {errors.address && (
-                <p className="text-red-500 text-sm mt-1">{errors.address}</p>
               )}
-            </div>
-          </div>
 
-          {/* Rental Information */}
-          <div className="mb-8">
-            <h3 className="text-lg font-medium text-gray-900 mb-4 flex items-center">
-              <Calendar className="w-5 h-5 mr-2 text-green-600" />
-              ข้อมูลการเช่า
-            </h3>
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+              {/* Business Name */}
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-2">
-                  เลือกห้องเช่า <span className="text-red-500">*</span>
+                  ຊື່ <span className="text-red-500">*</span>
                 </label>
-                {loading && (
-                  <div className="text-sm text-gray-500 mb-2">กำลังโหลดข้อมูลห้อง...</div>
-                )}
-                {!loading && availableRooms.length === 0 && (
-                  <div className="text-sm text-red-500 mb-2">ไม่มีห้องว่างให้เลือก</div>
-                )}
-                <select
-                  value={formData.roomId}
-                  onChange={(e) => handleInputChange('roomId', e.target.value)}
+                <input
+                  type="text"
+                  value={formData.tenantName}
+                  onChange={(e) => {
+                    const name = e.target.value;
+                    handleInputChange("tenantName", name);
+
+                    // Auto-generate tenantId for new tenants
+                    if (!editingTenant && name.trim()) {
+                      const newId = generateTenantId(name, tenants); // Pass existing tenants
+                      handleInputChange("tenantId", newId);
+                    }
+                  }}
                   className={`w-full px-4 py-3 border rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent ${
-                    errors.roomId ? 'border-red-500' : 'border-gray-300'
+                    errors.tenantName ? "border-red-500" : "border-gray-300"
                   }`}
-                  disabled={loading || availableRooms.length === 0}
-                >
-                  <option value="">
-                    {loading ? 'กำลังโหลด...' : 
-                     availableRooms.length === 0 ? 'ไม่มีห้องว่าง' : 'เลือกห้องเช่า'}
-                  </option>
-                  {availableRooms.map(room => (
-                    <option key={room.id} value={room.id}>
-                      ห้อง {room.roomNumber} - โซน {room.zone} - {room.size} - ฿{room.monthlyRate?.toLocaleString() || '0'}/เดือน
-                    </option>
-                  ))}
-                </select>
-                {errors.roomId && (
-                  <p className="text-red-500 text-sm mt-1">{errors.roomId}</p>
-                )}
-              </div>
-
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">
-                  ประเภทสัญญา
-                </label>
-                <select
-                  value={formData.contractType}
-                  onChange={(e) => handleInputChange('contractType', e.target.value)}
-                  className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                >
-                  <option value="daily">รายวัน</option>
-                  <option value="monthly">รายเดือน</option>
-                  <option value="yearly">รายปี</option>
-                </select>
-              </div>
-
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">
-                  เงินมัดจำ (บาท) <span className="text-red-500">*</span>
-                </label>
-                <div className="relative">
-                  <CreditCard className="absolute left-3 top-1/2 transform -translate-y-1/2 w-5 h-5 text-gray-400" />
-                  <input
-                    type="number"
-                    value={formData.deposit}
-                    onChange={(e) => handleInputChange('deposit', e.target.value)}
-                    className={`w-full pl-10 pr-4 py-3 border rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent ${
-                      errors.deposit ? 'border-red-500' : 'border-gray-300'
-                    }`}
-                    placeholder={selectedRoom ? `แนะนำ: ${(selectedRoom.monthlyRate * 2).toLocaleString()}` : "0"}
-                    min="0"
-                    step="100"
-                  />
-                </div>
-                {errors.deposit && (
-                  <p className="text-red-500 text-sm mt-1">{errors.deposit}</p>
-                )}
-                {selectedRoom && selectedRoom.monthlyRate && (
-                  <p className="text-sm text-gray-500 mt-1">
-                    แนะนำเงินมัดจำ: ฿{(selectedRoom.monthlyRate * 2).toLocaleString()} (2 เดือน)
+                  placeholder="ຊື່ຮ້ານຄ້າ/ທຸລະກິດ"
+                />
+                {errors.tenantName && (
+                  <p className="text-red-500 text-sm mt-1">
+                    {errors.tenantName}
                   </p>
                 )}
               </div>
             </div>
 
-            {/* Room Details Display */}
-            {selectedRoom && (
-              <div className="mt-6 p-6 bg-gradient-to-r from-green-50 to-blue-50 rounded-xl border border-green-200 shadow-sm">
-                <h4 className="font-medium text-blue-900 mb-2">รายละเอียดห้องที่เลือก</h4>
-                <div className="text-sm text-green-600 mb-4">
-                  ✓ ข้อมูลห้องถูกโหลดจากระบบจัดการห้องเช่า
-                </div>
-                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
-                  <div>
-                    <div className="bg-white p-3 rounded-lg shadow-sm">
-                      <span className="text-blue-600 text-xs font-medium">หมายเลขห้อง</span>
-                      <p className="font-bold text-lg text-gray-900">{selectedRoom.roomNumber || 'ไม่ระบุ'}</p>
-                    </div>
-                  </div>
-                  <div>
-                    <div className="bg-white p-3 rounded-lg shadow-sm">
-                      <span className="text-blue-600 text-xs font-medium">โซน</span>
-                      <p className="font-bold text-lg text-gray-900">โซน {selectedRoom.zone || 'ไม่ระบุ'}</p>
-                    </div>
-                  </div>
-                  <div>
-                    <div className="bg-white p-3 rounded-lg shadow-sm">
-                      <span className="text-blue-600 text-xs font-medium">ขนาดห้อง</span>
-                      <p className="font-bold text-lg text-gray-900">{selectedRoom.size || 'ไม่ระบุ'}</p>
-                    </div>
-                  </div>
-                  <div>
-                    <div className="bg-white p-3 rounded-lg shadow-sm">
-                      <span className="text-blue-600 text-xs font-medium">ตำแหน่ง</span>
-                      <p className="font-bold text-lg text-gray-900">{selectedRoom.location || 'ไม่ระบุ'}</p>
-                    </div>
-                  </div>
-                </div>
-                
-                {/* Pricing Information */}
-                <div className="mt-4 grid grid-cols-1 md:grid-cols-2 gap-4">
-                  <div className="bg-orange-50 p-4 rounded-lg border border-orange-200">
-                    <div className="flex items-center space-x-2">
-                      <div className="w-3 h-3 bg-orange-500 rounded-full"></div>
-                      <span className="text-orange-700 font-medium">ค่าเช่ารายวัน</span>
-                    </div>
-                    <p className="text-2xl font-bold text-orange-800 mt-1">฿{selectedRoom.dailyRate?.toLocaleString() || '0'}</p>
-                  </div>
-                  <div className="bg-green-50 p-4 rounded-lg border border-green-200">
-                    <div className="flex items-center space-x-2">
-                      <div className="w-3 h-3 bg-green-500 rounded-full"></div>
-                      <span className="text-green-700 font-medium">ค่าเช่ารายเดือน</span>
-                    </div>
-                    <p className="text-2xl font-bold text-green-800 mt-1">฿{selectedRoom.monthlyRate?.toLocaleString() || '0'}</p>
-                  </div>
-                </div>
-                <div className="mt-4">
-                  <div className="bg-blue-50 p-4 rounded-lg border border-blue-200">
-                    <div className="flex items-center space-x-2">
-                      <div className="w-3 h-3 bg-blue-500 rounded-full"></div>
-                      <span className="text-blue-700 font-medium">ค่าเช่ารายปี</span>
-                    </div>
-                    <p className="text-2xl font-bold text-blue-800 mt-1">฿{selectedRoom.yearlyRate?.toLocaleString() || '0'}</p>
-                    {selectedRoom.monthlyRate && selectedRoom.yearlyRate && (
-                      <p className="text-sm text-blue-600 mt-1">
-                        ประหยัด ฿{((selectedRoom.monthlyRate * 12) - selectedRoom.yearlyRate).toLocaleString()}
-                      </p>
-                    )}
-                  </div>
-                </div>
-                
-                {/* Room Description */}
-                {selectedRoom.description && (
-                  <div className="mt-4 p-3 bg-white rounded-lg border border-gray-200">
-                    <span className="text-gray-600 text-sm font-medium">รายละเอียดห้อง:</span>
-                    <p className="text-gray-800 mt-1">{selectedRoom.description}</p>
-                  </div>
-                )}
-              </div>
-            )}
+            {/* Contact */}
+            <div className="mt-6">
+              <label className="block text-sm font-medium text-gray-700 mb-2">
+                ຂໍ້ມູນຕິດຕໍ່ <span className="text-red-500">*</span>
+              </label>
+              <input
+                type="text"
+                value={formData.contact}
+                onChange={(e) => handleInputChange("contact", e.target.value)}
+                className={`w-full px-4 py-3 border rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent ${
+                  errors.contact ? "border-red-500" : "border-gray-300"
+                }`}
+                placeholder="ເບີໂທລະສັບຫຼືອີເມວ"
+              />
+              {errors.contact && (
+                <p className="text-red-500 text-sm mt-1">{errors.contact}</p>
+              )}
+            </div>
           </div>
 
-          {/* Emergency Contact */}
+          {/* Space Assignment */}
           <div className="mb-8">
-            <h3 className="text-lg font-medium text-gray-900 mb-4 flex items-center">
-              <Phone className="w-5 h-5 mr-2 text-orange-600" />
-              ผู้ติดต่อฉุกเฉิน
-            </h3>
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">
-                  ชื่อผู้ติดต่อ
-                </label>
-                <input
-                  type="text"
-                  value={formData.emergencyContactName}
-                  onChange={(e) => handleInputChange('emergencyContactName', e.target.value)}
-                  className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                  placeholder="ชื่อผู้ติดต่อฉุกเฉิน"
-                />
-              </div>
+  <h3 className="text-lg font-medium text-gray-900 mb-4 flex items-center">
+    <Hash className="w-5 h-5 mr-2 text-green-600" />
+    ຈັດສັນພື້ນທີ່ເຊົ່າ
+  </h3>
 
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">
-                  เบอร์โทรศัพท์
+  {/* IF EDITING - Show two separate sections */}
+  {editingTenant ? (
+    <>
+      {/* Current Rented Spaces */}
+      <div className="mb-6">
+        <label className="block text-sm font-medium text-gray-700 mb-2">
+          ພື້ນທີ່ທີ່ເຊົ່າຢູ່ປັດຈຸບັນ ({(formData.allSpace || []).length} ພື້ນທີ່)
+        </label>
+        <div className="max-h-40 overflow-y-auto border border-blue-300 bg-blue-50 rounded-lg p-4">
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+            {(formData.allSpace || []).map((spaceId) => {
+              const space = spaces.find((s) => s.id === spaceId);
+              if (!space) return null;
+              
+              return (
+                <label key={spaceId} className="flex items-center space-x-3 p-2 rounded hover:bg-blue-100 cursor-pointer">
+                  <input
+                    type="checkbox"
+                    checked={true}
+                    onChange={() => handleSpaceToggle(spaceId)}
+                    className="w-4 h-4 text-red-600 border-gray-300 rounded focus:ring-red-500"
+                  />
+                  <div className="flex-1">
+                    <div className="text-sm font-medium text-blue-900">
+                      {space.spaceCode} <span className="text-xs text-blue-600">(ປັດຈຸບັນ)</span>
+                    </div>
+                    <div className="text-xs text-blue-700">
+                      {space.spaceType} • Zone {space.zone} • ₭{space.baseRentMonthly.toLocaleString()}/ເດືອນ
+                    </div>
+                  </div>
                 </label>
-                <input
-                  type="tel"
-                  value={formData.emergencyContactPhone}
-                  onChange={(e) => handleInputChange('emergencyContactPhone', e.target.value)}
-                  className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                  placeholder="081-234-5678"
-                />
-              </div>
+              );
+            })}
+          </div>
+          
+          {(formData.allSpace || []).length === 0 && (
+            <p className="text-blue-600 text-center py-4">ບໍ່ມີພື້ນທີ່ທີ່ເຊົ່າຢູ່</p>
+          )}
+        </div>
+      </div>
 
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">
-                  ความสัมพันธ์
+      {/* Available Spaces to Add */}
+      <div className="mb-6">
+        <label className="block text-sm font-medium text-gray-700 mb-2">
+          ພື້ນທີ່ວ່າງທີ່ສາມາດເພີ່ມໄດ້
+        </label>
+        
+        {/* Space Type Filter for Available Spaces */}
+        <div className="mb-3">
+          <div className="flex flex-wrap gap-2">
+            {[
+              { key: "all", label: "ທັງໝົດ" },
+              { key: "ໂຕະ", label: "ໂຕະ" },
+              { key: "ຫ້ອງເຊົ່າ", label: "ຫ້ອງເຊົ່າ" },
+              { key: "ບູດ", label: "ບູດ" },
+              { key: "ປ້າຍ", label: "ປ້າຍ" },
+            ].map((tab) => (
+              <button
+                key={tab.key}
+                type="button"
+                onClick={() => setSpaceTypeFilter(tab.key)}
+                className={`px-3 py-1 rounded text-sm transition-colors ${
+                  spaceTypeFilter === tab.key
+                    ? "bg-green-600 text-white"
+                    : "bg-gray-100 text-gray-700 hover:bg-gray-200"
+                }`}
+              >
+                {tab.label}
+              </button>
+            ))}
+          </div>
+        </div>
+
+        <div className="max-h-40 overflow-y-auto border border-green-300 bg-green-50 rounded-lg p-4">
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+            {spaces
+              .filter((space) => {
+                // Only show truly vacant spaces
+                const isVacant = space.status === "ວ່າງ";
+                const matchesFilter = spaceTypeFilter === "all" || space.spaceType === spaceTypeFilter;
+                const notCurrentlySelected = !(formData.allSpace || []).includes(space.id);
+                
+                return isVacant && matchesFilter && notCurrentlySelected;
+              })
+              .map((space) => (
+                <label key={space.id} className="flex items-center space-x-3 p-2 rounded hover:bg-green-100 cursor-pointer">
+                  <input
+                    type="checkbox"
+                    checked={false}
+                    onChange={() => handleSpaceToggle(space.id)}
+                    className="w-4 h-4 text-green-600 border-gray-300 rounded focus:ring-green-500"
+                  />
+                  <div className="flex-1">
+                    <div className="text-sm font-medium text-green-900">
+                      {space.spaceCode} <span className="text-xs text-green-600">(ວ່າງ)</span>
+                    </div>
+                    <div className="text-xs text-green-700">
+                      {space.spaceType} • Zone {space.zone} • ₭{space.baseRentMonthly.toLocaleString()}/ເດືອນ
+                    </div>
+                  </div>
                 </label>
-                <select
-                  value={formData.emergencyContactRelation}
-                  onChange={(e) => handleInputChange('emergencyContactRelation', e.target.value)}
-                  className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                >
-                  <option value="">เลือกความสัมพันธ์</option>
-                  <option value="พ่อ">พ่อ</option>
-                  <option value="แม่">แม่</option>
-                  <option value="พี่">พี่</option>
-                  <option value="น้อง">น้อง</option>
-                  <option value="สามี">สามี</option>
-                  <option value="ภรรยา">ภรรยา</option>
-                  <option value="เพื่อน">เพื่อน</option>
-                  <option value="อื่นๆ">อื่นๆ</option>
-                </select>
+              ))
+            }
+          </div>
+          
+          {spaces.filter((space) => {
+            const isVacant = space.status === "ວ່າງ";
+            const matchesFilter = spaceTypeFilter === "all" || space.spaceType === spaceTypeFilter;
+            const notCurrentlySelected = !(formData.allSpace || []).includes(space.id);
+            return isVacant && matchesFilter && notCurrentlySelected;
+          }).length === 0 && (
+            <p className="text-green-600 text-center py-4">ບໍ່ມີພື້ນທີ່ວ່າງເພີ່ມເຕີມ</p>
+          )}
+        </div>
+      </div>
+    </>
+  ) : (
+    // IF ADDING - Keep original single list for available spaces
+    <>
+      {/* Space Type Filter Tabs */}
+      <div className="mb-4">
+        <div className="flex flex-wrap gap-2">
+          {[
+            {
+              key: "all",
+              label: "ທັງໝົດ",
+              count: spaces.filter((s) => s.status === "ວ່າງ").length,
+            },
+            {
+              key: "ໂຕະ",
+              label: "ໂຕະ",
+              count: spaces.filter((s) => s.status === "ວ່າງ" && s.spaceType === "ໂຕະ").length,
+            },
+            {
+              key: "ຫ້ອງເຊົ່າ",
+              label: "ຫ້ອງເຊົ່າ",
+              count: spaces.filter((s) => s.status === "ວ່າງ" && s.spaceType === "ຫ້ອງເຊົ່າ").length,
+            },
+            {
+              key: "ບູດ",
+              label: "ບູດ",
+              count: spaces.filter((s) => s.status === "ວ່າງ" && s.spaceType === "ບູດ").length,
+            },
+            {
+              key: "ປ້າຍ",
+              label: "ປ້າຍ",
+              count: spaces.filter((s) => s.status === "ວ່າງ" && s.spaceType === "ປ້າຍ").length,
+            },
+          ].map((tab) => (
+            <button
+              key={tab.key}
+              type="button"
+              onClick={() => setSpaceTypeFilter(tab.key)}
+              className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors ${
+                spaceTypeFilter === tab.key
+                  ? "bg-blue-600 text-white"
+                  : "bg-gray-100 text-gray-700 hover:bg-gray-200"
+              }`}
+            >
+              {tab.label} ({tab.count})
+            </button>
+          ))}
+        </div>
+      </div>
+
+      {errors.spaces && (
+        <div className="mb-4 p-3 bg-red-50 border border-red-200 rounded-lg">
+          <p className="text-red-700 text-sm">{errors.spaces}</p>
+        </div>
+      )}
+
+      {/* Available Spaces */}
+      <div className="mb-4">
+        <label className="block text-sm font-medium text-gray-700 mb-2">
+          ເລືອກພື້ນທີ່ທີ່ຕ້ອງການເຊົ່າ{" "}
+          {spaceTypeFilter !== "all" && `(${spaceTypeFilter})`}
+        </label>
+
+        <div className="max-h-60 overflow-y-auto border border-gray-300 rounded-lg p-4">
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+            {getFilteredSpaces().map((space) => renderSpaceCheckbox(space))}
+          </div>
+
+          {/* Empty state */}
+          {getFilteredSpaces().length === 0 && (
+            <p className="text-gray-500 text-center py-8">
+              ບໍ່ມີພື້ນທີ່ວ່າງໃຫ້ເລືອກໃນໝວດນີ້
+            </p>
+          )}
+        </div>
+
+        {/* Legend */}
+        <div className="mt-2 text-xs text-gray-500 flex gap-4">
+          <span className="flex items-center gap-1">
+            <div className="w-2 h-2 bg-green-500 rounded-full"></div>
+            ວ່າງ
+          </span>
+          <span className="flex items-center gap-1">
+            <div className="w-2 h-2 bg-red-500 rounded-full"></div>
+            ເຊົ່າແລ້ວ
+          </span>
+          <span className="flex items-center gap-1">
+            <div className="w-2 h-2 bg-orange-500 rounded-full"></div>
+            ສ້ອມແປງ
+          </span>
+        </div>
+      </div>
+    </>
+  )}
+
+  {/* Selected Spaces Summary - Show for both add and edit */}
+  {(formData.allSpace || []).length > 0 && (
+    <div className="bg-gray-50 rounded-lg p-4">
+      <div className="text-sm font-medium text-gray-800 mb-2">
+        ລວມພື້ນທີ່ທີ່ເລືອກ ({formData.allSpace.length} ພື້ນທີ່)
+      </div>
+      <div className="flex flex-wrap gap-2">
+        {(formData.allSpace || []).map((spaceId) => {
+          const space = spaces.find((s) => s.id === spaceId);
+          return space ? (
+            <span
+              key={spaceId}
+              className="px-2 py-1 bg-blue-100 text-blue-700 text-xs rounded"
+            >
+              {space.spaceCode}
+            </span>
+          ) : null;
+        })}
+      </div>
+      <div className="text-sm text-blue-600 mt-2">
+        ລວມຄ່າເຊົ່າ: ₭{calculateTotalRent().toLocaleString()}/ເດືອນ
+      </div>
+    </div>
+  )}
+</div>
+
+          {/* Current Status Display (if editing) */}
+          {editingTenant && (
+            <div className="mb-8">
+              <h3 className="text-lg font-medium text-gray-900 mb-4 flex items-center">
+                <Hash className="w-5 h-5 mr-2 text-purple-600" />
+                ພື້ນທີ່ທີ່ເຊົ່າ
+              </h3>
+
+              <div className="bg-gray-50 rounded-lg p-4">
+                <div className="text-sm text-gray-600 mb-2">
+                  ພື້ນທີ່ປັດຈຸບັນ:
+                </div>
+                <div className="text-lg font-semibold text-green-600">
+                  {editingTenant.allSpace?.length || 0} ພື້ນທີ່
+                </div>
+                <div className="text-sm text-gray-700 mt-2">
+                  ລະຫັດ: {editingTenant.allSpace?.join(", ") || "ບໍ່ມີ"}
+                </div>
               </div>
             </div>
+          )}
+
+          {/* Important Notes */}
+          <div className="mb-6 p-4 bg-yellow-50 rounded-lg border border-yellow-200">
+            <h4 className="text-sm font-medium text-yellow-800 mb-2">
+              ໝາຍເຫດສຳຄັນ:
+            </h4>
+            <ul className="text-sm text-yellow-700 space-y-1">
+              <li>• ຂໍ້ມູນຜູ້ເຊົ່າຈະຖືກບັນທຶກໃນລະບົບຖານຂໍ້ມູນ Firestore</li>
+              <li>• ການຈັດສັນພື້ນທີ່ເຊົ່າຈະເຮັດຜ່ານລະບົບສັນຍາແຍກຕ່າງຫາກ</li>
+              <li>• ສະຖານະ "ບັນຊີດຳ" ຈະປ້ອງກັນການເຮັດສັນຍາໃໝ່</li>
+              {editingTenant && (
+                <li>• ການແກ້ໄຂຂໍ້ມູນຈະບໍ່ກະທົບຕໍ່ສັນຍາທີ່ມີຜົນຢູ່</li>
+              )}
+            </ul>
           </div>
 
           {/* Action Buttons */}
@@ -523,7 +674,7 @@ const TenantModal: React.FC<TenantModalProps> = ({ isOpen, onClose, onSubmit, ed
               onClick={onClose}
               className="flex-1 px-6 py-3 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 transition-colors"
             >
-              ยกเลิก
+              ຍົກເລີກ
             </button>
             <button
               type="submit"
@@ -533,10 +684,12 @@ const TenantModal: React.FC<TenantModalProps> = ({ isOpen, onClose, onSubmit, ed
               {isSubmitting ? (
                 <div className="flex items-center justify-center space-x-2">
                   <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
-                  <span>กำลังบันทึก...</span>
+                  <span>ກຳລັງບັນທຶກ...</span>
                 </div>
+              ) : editingTenant ? (
+                "ອັບເດດຂໍ້ມູນຜູ້ເຊົ່າ"
               ) : (
-                editingTenant ? 'อัปเดตข้อมูลผู้เช่า' : 'เพิ่มผู้เช่าใหม่'
+                "ເພີ່ມຜູ້ເຊົ່າໃໝ່"
               )}
             </button>
           </div>
