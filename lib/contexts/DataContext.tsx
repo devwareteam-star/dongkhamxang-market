@@ -768,7 +768,7 @@ const deleteTenant = async (tenantId: string) => {
   }
 };
 
-  // Payment operations
+  // Payment operations nice
   const addPayment = async (
     paymentData: Omit<Payment, "paymentId" | "createdAt" | "updatedAt">
   ) => {
