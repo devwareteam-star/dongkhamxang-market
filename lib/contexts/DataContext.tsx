@@ -420,25 +420,28 @@ const generatePaymentsForTenant = async (
   };
 
   const updateSpace = async (id: string, spaceUpdate: Partial<Space>) => {
-    try {
-      const existingSpace = spaces.find((s) => s.id === id);
-      if (!existingSpace) {
-        throw new Error("Space not found");
-      }
-
-      await spacesService.update(id, spaceUpdate);
-      setSpaces((prev) =>
-        prev.map((space) =>
-          space.id === id ? { ...space, ...spaceUpdate } : space
-        )
-      );
-
-      console.log("Space updated:", id);
-    } catch (error) {
-      console.error("Error updating space:", error);
-      throw error;
+  try {
+    const existingSpace = spaces.find((s) => s.id === id);
+    if (!existingSpace) {
+      throw new Error("Space not found");
     }
-  };
+
+    // Update in database first
+    await spacesService.update(id, spaceUpdate);
+    
+    // Then update local state synchronously
+    setSpaces((prev) =>
+      prev.map((space) =>
+        space.id === id ? { ...space, ...spaceUpdate } : space
+      )
+    );
+
+    console.log("Space updated:", id);
+  } catch (error) {
+    console.error("Error updating space:", error);
+    throw error;
+  }
+};
 
   const deleteSpace = async (id: string) => {
     try {
@@ -496,6 +499,8 @@ const addTenant = async (
           const spaceUpdate = {
             status: "ເຊົ່າແລ້ວ" as const,
             currentTenantId: newTenant.tenantId,
+            currentTenantName: newTenant.tenantName ,
+
             updatedAt: new Date(),
           };
 
@@ -518,40 +523,40 @@ const addTenant = async (
     }
 
     // Generate initial payments for the new tenant (pass tenant directly to avoid state timing issues)
-    if (tenantData.allSpace && tenantData.allSpace.length > 0) {
-      try {
-        // Determine payment frequency based on assigned spaces
-        const assignedSpaces = spaces.filter(s => tenantData.allSpace.includes(s.id));
+    // if (tenantData.allSpace && tenantData.allSpace.length > 0) {
+    //   try {
+    //     // Determine payment frequency based on assigned spaces
+    //     const assignedSpaces = spaces.filter(s => tenantData.allSpace.includes(s.id));
         
-        // Check if any space has a specific payment frequency
-        const hasYearlySpace = assignedSpaces.some(space => space.paymentFrequency === 'yearly');
-        const hasDailySpace = assignedSpaces.some(space => space.paymentFrequency === 'daily');
+    //     // Check if any space has a specific payment frequency
+    //     const hasYearlySpace = assignedSpaces.some(space => space.paymentFrequency === 'yearly');
+    //     const hasDailySpace = assignedSpaces.some(space => space.paymentFrequency === 'daily');
         
-        // Determine payment frequency priority: yearly > monthly > daily
-        let paymentFrequency: 'daily' | 'monthly' | 'yearly' = 'monthly'; // default
+    //     // Determine payment frequency priority: yearly > monthly > daily
+    //     let paymentFrequency: 'daily' | 'monthly' | 'yearly' = 'monthly'; // default
         
-        if (hasYearlySpace) {
-          paymentFrequency = 'yearly';
-        } else if (hasDailySpace) {
-          paymentFrequency = 'daily';
-        }
+    //     if (hasYearlySpace) {
+    //       paymentFrequency = 'yearly';
+    //     } else if (hasDailySpace) {
+    //       paymentFrequency = 'daily';
+    //     }
 
-        await generatePaymentsForTenant(
-      newTenant.tenantId, 
-      undefined, // Generate for all frequencies
-      new Date(), 
-      newTenantConverted
-        );
+    //     await generatePaymentsForTenant(
+    //   newTenant.tenantId, 
+    //   undefined, // Generate for all frequencies
+    //   new Date(), 
+    //   newTenantConverted
+    //     );
         
-        console.log(`Generated ${paymentFrequency} payment for new tenant`);
-      } catch (error) {
-        console.error(
-          "Failed to generate initial payment for new tenant:",
-          error
-        );
-        // Don't throw here - tenant creation was successful
-      }
-    }
+    //     console.log(`Generated ${paymentFrequency} payment for new tenant`);
+    //   } catch (error) {
+    //     console.error(
+    //       "Failed to generate initial payment for new tenant:",
+    //       error
+    //     );
+    //     // Don't throw here - tenant creation was successful
+    //   }
+    // }
 
     console.log("Tenant and spaces updated successfully:", newTenant);
     return newTenant;
@@ -562,173 +567,206 @@ const addTenant = async (
   }
 };
 
-  const updateTenant = async (id: string, tenantUpdate: Partial<Tenant>) => {
-    try {
-      const existingTenant = tenants.find((t) => t.id === id);
-      if (!existingTenant) {
-        throw new Error("Tenant not found");
-      }
+const updateTenant = async (id: string, tenantUpdate: Partial<Tenant>) => {
+  try {
+    const existingTenant = tenants.find((t) => t.id === id);
+    if (!existingTenant) {
+      throw new Error("Tenant not found");
+    }
 
-      // Handle space assignment changes
-      if (tenantUpdate.allSpace !== undefined) {
-        const oldSpaces = existingTenant.allSpace || [];
-        const newSpaces = tenantUpdate.allSpace || [];
+    // Handle space assignment changes
+    if (tenantUpdate.allSpace !== undefined) {
+      const oldSpaces = existingTenant.allSpace || [];
+      const newSpaces = tenantUpdate.allSpace || [];
 
-        const spacesToRemove = oldSpaces.filter(
-          (spaceId) => !newSpaces.includes(spaceId)
-        );
-        const spacesToAdd = newSpaces.filter(
-          (spaceId) => !oldSpaces.includes(spaceId)
-        );
-
-        // Check if new spaces are available
-        if (spacesToAdd.length > 0) {
-          const conflictingSpaces = spaces.filter(
-            (space) =>
-              spacesToAdd.includes(space.id) &&
-              space.status === "ເຊົ່າແລ້ວ" &&
-              space.currentTenantId &&
-              space.currentTenantId !== existingTenant.tenantId
-          );
-
-          if (conflictingSpaces.length > 0) {
-            const conflictCodes = conflictingSpaces
-              .map((s) => s.spaceCode)
-              .join(", ");
-            throw new Error(
-              `ພື້ນທີ່ ${conflictCodes} ຖືກເຊົ່າແລ້ວໂດຍຜູ້ເຊົ່າອື່ນ`
-            );
-          }
-        }
-
-        // Remove tenant from old spaces
-        const removeSpacePromises = spacesToRemove.map(async (spaceId) => {
-          const spaceUpdate = {
-            status: "ວ່າງ" as const,
-            currentTenantId: undefined,
-            updatedAt: new Date(),
-          };
-
-          await spacesService.update(spaceId, spaceUpdate);
-          setSpaces((prev) =>
-            prev.map((space) =>
-              space.id === spaceId ? { ...space, ...spaceUpdate } : space
-            )
-          );
-        });
-
-        // Add tenant to new spaces
-        const addSpacePromises = spacesToAdd.map(async (spaceId) => {
-          const spaceUpdate = {
-            status: "ເຊົ່າແລ້ວ" as const,
-            currentTenantId: id,
-            updatedAt: new Date(),
-          };
-
-          await spacesService.update(spaceId, spaceUpdate);
-          setSpaces((prev) =>
-            prev.map((space) =>
-              space.id === spaceId ? { ...space, ...spaceUpdate } : space
-            )
-          );
-        });
-
-        await Promise.all([...removeSpacePromises, ...addSpacePromises]);
-
-        // Handle payment generation for newly assigned spaces
-        if (spacesToAdd.length > 0) {
-          try {
-            // Check if tenant already has payments for current period
-            const currentPeriod = `${new Date().getFullYear()}-${String(
-              new Date().getMonth() + 1
-            ).padStart(2, "0")}`;
-            const existingPayment = payments.find(
-              (p) =>
-                p.tenantId === existingTenant.tenantId &&
-                p.paymentPeriod === currentPeriod
-            );
-
-            if (!existingPayment) {
-              await generatePaymentsForTenant(
-                existingTenant.tenantId,
-                "monthly"
-              );
-            }
-          } catch (error) {
-            console.error(
-              "Failed to generate payment for updated tenant spaces:",
-              error
-            );
-          }
-        }
-      }
-
-      // Update tenant record
-      await tenantsService.update(id, tenantUpdate);
-      setTenants((prev) =>
-        prev.map((tenant) =>
-          tenant.id === id ? { ...tenant, ...tenantUpdate } : tenant
-        )
+      const spacesToRemove = oldSpaces.filter(
+        (spaceId) => !newSpaces.includes(spaceId)
+      );
+      const spacesToAdd = newSpaces.filter(
+        (spaceId) => !oldSpaces.includes(spaceId)
       );
 
-      console.log("Tenant updated:", id);
-    } catch (error) {
-      console.error("Error updating tenant:", error);
-      throw error;
-    }
-  };
+      // Check if new spaces are available
+      if (spacesToAdd.length > 0) {
+        const conflictingSpaces = spaces.filter(
+          (space) =>
+            spacesToAdd.includes(space.id) &&
+            space.status === "ເຊົ່າແລ້ວ" &&
+            space.currentTenantId &&
+            space.currentTenantId !== existingTenant.tenantId
+        );
 
-  const deleteTenant = async (tenantId: string) => {
-    try {
-      console.log("🔍 Looking for tenant with ID:", tenantId);
-
-      // Find the tenant by tenantId to get the Firebase document ID
-      const tenant = tenants.find((t) => t.tenantId === tenantId);
-      if (!tenant) {
-        console.error("❌ Tenant not found. Search ID:", tenantId);
-        throw new Error("Tenant not found");
+        if (conflictingSpaces.length > 0) {
+          const conflictCodes = conflictingSpaces
+            .map((s) => s.spaceCode)
+            .join(", ");
+          throw new Error(
+            `ພື້ນທີ່ ${conflictCodes} ຖືກເຊົ່າແລ້ວໂດຍຜູ້ເຊົ່າອື່ນ`
+          );
+        }
       }
 
-      console.log("✅ Found tenant:", tenant);
+      // Remove tenant from old spaces - SYNC VERSION
+      for (const spaceId of spacesToRemove) {
+        const spaceUpdate = {
+          status: "ວ່າງ" as const,
+          currentTenantId: null, // Explicitly set to null
+          currentTenantName: null, // Clear tenant name
+          updatedAt: new Date(),
+        };
 
-      // Free up all assigned spaces
-      if (tenant.allSpace && tenant.allSpace.length > 0) {
-        const spaceUpdatePromises = tenant.allSpace.map(async (spaceId) => {
-          const spaceUpdate = {
-            status: "ວ່າງ" as const,
-            currentTenantId: undefined,
-            updatedAt: new Date(),
-          };
+        // Update database first
+        await spacesService.update(spaceId, spaceUpdate);
+        
+        // Update local state immediately
+        setSpaces((prev) =>
+          prev.map((space) =>
+            space.id === spaceId 
+              ? { 
+                  ...space, 
+                  ...spaceUpdate,
+                  currentTenantId: undefined, // Set to undefined for local state
+                  currentTenantName: undefined 
+                } 
+              : space
+          )
+        );
+        console.log(`✅ Removed tenant from space ${spaceId}`);
+      }
 
+      // Add tenant to new spaces - SYNC VERSION
+      for (const spaceId of spacesToAdd) {
+        const spaceUpdate = {
+          status: "ເຊົ່າແລ້ວ" as const,
+          currentTenantId: existingTenant.tenantId,
+          currentTenantName:  existingTenant.tenantName,
+          updatedAt: new Date(),
+        };
+
+        // Update database first
+        await spacesService.update(spaceId, spaceUpdate);
+        
+        // Update local state immediately
+        setSpaces((prev) =>
+          prev.map((space) =>
+            space.id === spaceId ? { ...space, ...spaceUpdate } : space
+          )
+        );
+        console.log(`✅ Added tenant to space ${spaceId}`);
+      }
+
+      // Handle payment generation for newly assigned spaces
+      // if (spacesToAdd.length > 0) {
+      //   try {
+      //     const currentPeriod = `${new Date().getFullYear()}-${String(
+      //       new Date().getMonth() + 1
+      //     ).padStart(2, "0")}`;
+      //     const existingPayment = payments.find(
+      //       (p) =>
+      //         p.tenantId === existingTenant.tenantId &&
+      //         p.paymentPeriod === currentPeriod
+      //     );
+
+      //     if (!existingPayment) {
+      //       await generatePaymentsForTenant(
+      //         existingTenant.tenantId,
+      //         "monthly"
+      //       );
+      //     }
+      //   } catch (error) {
+      //     console.error(
+      //       "Failed to generate payment for updated tenant spaces:",
+      //       error
+      //     );
+      //   }
+      // }
+    }
+
+    // Update tenant record in database
+    await tenantsService.update(id, tenantUpdate);
+    
+    // Update local tenant state
+    setTenants((prev) =>
+      prev.map((tenant) =>
+        tenant.id === id ? { ...tenant, ...tenantUpdate } : tenant
+      )
+    );
+
+    console.log("✅ Tenant updated successfully:", id);
+  } catch (error) {
+    console.error("❌ Error updating tenant:", error);
+    throw error;
+  }
+};
+
+const deleteTenant = async (tenantId: string) => {
+  try {
+    console.log("🔍 Looking for tenant with ID:", tenantId);
+
+    // Find the tenant by tenantId to get the Firebase document ID
+    const tenant = tenants.find((t) => t.tenantId === tenantId);
+    if (!tenant) {
+      console.error("❌ Tenant not found. Search ID:", tenantId);
+      throw new Error("Tenant not found");
+    }
+
+    console.log("✅ Found tenant:", tenant);
+
+    // Free up all assigned spaces - SYNC VERSION
+    if (tenant.allSpace && tenant.allSpace.length > 0) {
+      for (const spaceId of tenant.allSpace) {
+        const spaceUpdate = {
+          status: "ວ່າງ" as const,
+          currentTenantId: null, // Explicitly set to null for database
+          currentTenantName: null, // Clear tenant name
+          updatedAt: new Date(),
+        };
+
+        try {
+          // Update database first
           await spacesService.update(spaceId, spaceUpdate);
+          
+          // Update local state immediately
           setSpaces((prev) =>
             prev.map((space) =>
-              space.id === spaceId ? { ...space, ...spaceUpdate } : space
+              space.id === spaceId 
+                ? { 
+                    ...space, 
+                    status: "ວ່າງ" as const,
+                    currentTenantId: undefined, // undefined for local state
+                    currentTenantName: undefined,
+                    updatedAt: new Date()
+                  } 
+                : space
             )
           );
-        });
-
-        await Promise.all(spaceUpdatePromises);
+          console.log(`✅ Freed space ${spaceId} from tenant ${tenantId}`);
+        } catch (spaceError) {
+          console.error(`❌ Failed to free space ${spaceId}:`, spaceError);
+          // Continue with other spaces even if one fails
+        }
       }
-
-      // Use the Firebase document ID for deletion
-      const firebaseDocId = tenant.id;
-      if (!firebaseDocId) {
-        throw new Error("Firebase document ID missing");
-      }
-
-      // Delete tenant record using Firebase document ID
-      await tenantsService.delete(firebaseDocId);
-
-      // Update local state using tenantId for consistency
-      setTenants((prev) => prev.filter((t) => t.tenantId !== tenantId));
-
-      console.log("Tenant and associated spaces freed:", tenantId);
-    } catch (error) {
-      console.error("Error deleting tenant:", error);
-      throw error;
     }
-  };
+
+    // Use the Firebase document ID for deletion
+    const firebaseDocId = tenant.id;
+    if (!firebaseDocId) {
+      throw new Error("Firebase document ID missing");
+    }
+
+    // Delete tenant record using Firebase document ID
+    await tenantsService.delete(firebaseDocId);
+
+    // Update local state using tenantId for consistency
+    setTenants((prev) => prev.filter((t) => t.tenantId !== tenantId));
+
+    console.log("✅ Tenant deleted and all spaces freed:", tenantId);
+    
+  } catch (error) {
+    console.error("❌ Error deleting tenant:", error);
+    throw error;
+  }
+};
 
   // Payment operations
   const addPayment = async (

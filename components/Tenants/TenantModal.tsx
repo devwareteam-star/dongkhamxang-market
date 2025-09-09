@@ -113,25 +113,29 @@ const TenantModal: React.FC<TenantModalProps> = ({
   };
 
   const getFilteredSpaces = () => {
-    const availableSpaces = spaces.filter((space) => {
-      // Show vacant spaces
-      if (space.status === "ວ່າງ") return true;
+  const availableSpaces = spaces.filter((space) => {
+    // Show vacant spaces
+    if (space.status === "ວ່າງ") return true;
 
-      // Show spaces currently assigned to this tenant (when editing)
-      if (editingTenant && (formData.allSpace || []).includes(space.id))
-        return true; // Change from space.spaceId to space.id
+    // Show spaces currently assigned to this tenant (when editing)
+    if (editingTenant && (formData.allSpace || []).includes(space.id))
+      return true;
 
-      return false;
-    });
+    return false;
+  });
 
-    if (spaceTypeFilter === "all") {
-      return availableSpaces;
-    }
-
-    return availableSpaces.filter(
-      (space) => space.spaceType === spaceTypeFilter
+  if (spaceTypeFilter === "all") {
+    return availableSpaces.sort((a, b) => 
+      a.spaceCode.localeCompare(b.spaceCode, undefined, { numeric: true })
     );
-  };
+  }
+
+  return availableSpaces
+    .filter((space) => space.spaceType === spaceTypeFilter)
+    .sort((a, b) => 
+      a.spaceCode.localeCompare(b.spaceCode, undefined, { numeric: true })
+    );
+};
 
   // Add this validation function inside the TenantModal component
 const validateSpaceSelection = (): string[] => {

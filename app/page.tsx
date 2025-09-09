@@ -15,7 +15,7 @@ import UserManagement from '@/components/Users/UserManagement';
 import SettingsManagement from '@/components/Settings/SettingsManagement';
 import RoomSearch from '@/components/Search/RoomSearch';
 import TenantManagement from '@/components/Tenants/TenantManagement';
-import NotificationCenter from '@/components/Notifications/NotificationCenter';
+// import NotificationCenter from '@/components/Notifications/NotificationCenter';
 import EmployeeSchedule from '@/components/Schedule/EmployeeSchedule';
 
 export default function Home() {
@@ -84,8 +84,8 @@ export default function Home() {
       case 'reports':
         return hasPermission('reports', 'read') ? <ReportsManagement /> : <AccessDenied />;
       
-      case 'notifications':
-        return <NotificationCenter />; // All users can see notifications
+      // case 'notifications':
+      //   return <NotificationCenter />; // All users can see notifications
       
       case 'users':
         return hasPermission('users', 'read') ? <UserManagement /> : <AccessDenied />;

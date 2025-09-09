@@ -2,7 +2,7 @@
 
 import React, { useState } from 'react';
 import { useData } from '@/lib/contexts/DataContext';
-import { Space, SpaceTypeLabels, SpaceStatusLabels } from '@/types';
+import { Space, SpaceTypeLabels, SpaceStatusLabels, PaymentFrequencyStatusLabels } from '@/types';
 import SpaceModal from './RoomModal';
 import { 
   Building2, 
@@ -99,18 +99,19 @@ const SpaceManagement: React.FC = () => {
   }
 };
 
-  const getStatusBadge = (status: Space['status']) => {
-    const colors = {
-      'ເຊົ່າແລ້ວ': 'bg-green-100 text-green-800',
-      'ວ່າງ': 'bg-yellow-100 text-yellow-800',
-      'ຊ່ອມແຊມ': 'bg-red-100 text-red-800'
-    };
-    return (
-      <span className={`px-2 py-1 text-xs font-medium rounded-full ${colors[status] || 'bg-gray-100 text-gray-800'}`}>
-        {SpaceStatusLabels[status] || status}
-      </span>
-    );
+const getStatusBadge = (status: Space['status']) => {
+  const colors = {
+    'ເຊົ່າແລ້ວ': 'bg-green-100 text-green-800',
+    'ວ່າງ': 'bg-yellow-100 text-yellow-800',
+    'ຊ່ອມແຊມ': 'bg-red-400 text-white'
   };
+  
+  return (
+    <span className={`px-2 py-1 text-xs font-medium rounded-full ${colors[status] || 'bg-gray-100 text-gray-800'}`}>
+      {status}
+    </span>
+  );
+};
 
   const getTypeBadge = (type: Space['spaceType']) => {
     const colors = {
@@ -235,8 +236,8 @@ const SpaceManagement: React.FC = () => {
       <th className="px-6 py-4 text-left text-sm font-medium text-gray-900">ໂຊນ</th>
     )}
     <th className="px-6 py-4 text-left text-sm font-medium text-gray-900">ສະຖານະ</th>
-                <th className="px-6 py-4 text-left text-sm font-medium text-gray-900">ຄ່າເຊົ່າ/ເດືອນ</th>
-                <th className="px-6 py-4 text-left text-sm font-medium text-gray-900">ຄ່າເຊົ່າ/ປີ</th>
+                <th className="px-6 py-4 text-left text-sm font-medium text-gray-900">ປະເພດການຈ່າຍ</th>
+<th className="px-6 py-4 text-left text-sm font-medium text-gray-900">ລາຄາ</th>
                 <th className="px-6 py-4 text-left text-sm font-medium text-gray-900">ຜູ້ເຊົ່າ</th>
                 <th className="px-6 py-4 text-left text-sm font-medium text-gray-900">ປະເພດສິນຄ້າ</th>
                 <th className="px-6 py-4 text-center text-sm font-medium text-gray-900">ການດຳເນີນການ</th>
@@ -272,16 +273,16 @@ const SpaceManagement: React.FC = () => {
                     <td className="px-6 py-4 whitespace-nowrap">
                       {getStatusBadge(space.status)}
                     </td>
-                    <td className="px-6 py-4 whitespace-nowrap">
-                      <div className="font-medium text-green-600">
-                        ₭{space.baseRentMonthly.toLocaleString()}
-                      </div>
-                    </td>
-                    <td className="px-6 py-4 whitespace-nowrap">
-                      <div className="font-medium text-blue-600">
-                        ₭{(space.baseRentMonthly * 12).toLocaleString()}
-                      </div>
-                    </td>
+                   <td className="px-6 py-4 whitespace-nowrap">
+<div className="font-medium text-green-600">
+  {space.paymentFrequency ? PaymentFrequencyStatusLabels[space.paymentFrequency] || space.paymentFrequency : '-'}
+</div>
+</td>
+<td className="px-6 py-4 whitespace-nowrap">
+  <div className="font-medium text-blue-600">
+    ₭{space.originalRentAmount?.toLocaleString()}
+  </div>
+</td>
                     <td className="px-6 py-4 whitespace-nowrap">
                       {tenant ? (
                         <div className="text-purple-600 font-medium">

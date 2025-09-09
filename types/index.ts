@@ -331,6 +331,12 @@ export const SpaceStatusLabels: Record<string, string> = {
   'ຊ່ອມແຊມ': 'Maintenance'
 };
 
+export const PaymentFrequencyStatusLabels: Record<string, string> = {
+  'daily': 'ລາຍວັນ',
+  'monthly': 'ລາຍເດືອນ',
+  'yearly': 'ລາຍປີ'
+};
+
 export const TenantStatusLabels: Record<string, string> = {
   'ເຮັດວຽກ': 'Working',
   'ບໍ່ເຮັດວຽກ': 'Not Working', 

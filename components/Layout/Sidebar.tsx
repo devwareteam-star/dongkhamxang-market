@@ -40,7 +40,7 @@ const unreadNotifications = notifications.filter(n =>
     { id: 'payments', label: 'ການຊຳລະເງິນ', icon: CreditCard },
     { id: 'receipts', label: 'ໃບຮັບເງິນ', icon: Receipt },
     { id: 'reports', label: 'ລາຍງານ', icon: BarChart3 },
-    { id: 'notifications', label: 'ການແຈ້ງເຕືອນ', icon: Bell, badge: unreadNotifications },
+    // { id: 'notifications', label: 'ການແຈ້ງເຕືອນ', icon: Bell, badge: unreadNotifications },
     { id: 'users', label: 'ຈັດການຜູ້ໃຊ້', icon: Users },
     { id: 'settings', label: 'ຕັ້ງຄ່າລະບົບ', icon: Settings },
   ];
@@ -51,7 +51,7 @@ const unreadNotifications = notifications.filter(n =>
     { id: 'receipts', label: 'ໃບຮັບເງິນ', icon: Receipt },
     { id: 'search', label: 'ຄົ້ນຫາຫ້ອງ', icon: Search },
     { id: 'schedule', label: 'ຕາຕະລາງການ', icon: Calendar },
-    { id: 'notifications', label: 'ການແຈ້ງເຕືອນ', icon: Bell, badge: unreadNotifications },
+    // { id: 'notifications', label: 'ການແຈ້ງເຕືອນ', icon: Bell, badge: unreadNotifications },
   ];
 
   const menuItems = user?.role === 'manager' ? adminMenuItems : employeeMenuItems;
@@ -101,11 +101,11 @@ const unreadNotifications = notifications.filter(n =>
                     <Icon className="w-5 h-5 mr-3" />
                     <span>{item.label}</span>
                   </div>
-                  {item.badge && item.badge > 0 && (
+                  {/* {item.badge && item.badge > 0 && (
                     <span className="bg-red-500 text-white text-xs rounded-full w-5 h-5 flex items-center justify-center">
                       {item.badge > 99 ? '99+' : item.badge}
                     </span>
-                  )}
+                  )} */}
                 </button>
               </li>
             );

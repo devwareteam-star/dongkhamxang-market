@@ -3,6 +3,7 @@
 import React, { useState, useEffect } from "react";
 import { X, Building2, MapPin, DollarSign } from "lucide-react";
 import { Space, SpaceFormData } from "@/types";
+import { useData } from "@/lib/contexts/DataContext";
 
 import {
   getAvailableSpaceCodes,
@@ -28,6 +29,9 @@ const SpaceModal: React.FC<SpaceModalProps> = ({
   editingSpace,
 }) => {
   type PaymentFrequency = "daily" | "monthly" | "yearly";
+
+const { spaces } = useData();
+
 
   const getPaymentOptionsForSpaceType = (
     spaceType: Space["spaceType"]
@@ -59,11 +63,28 @@ const SpaceModal: React.FC<SpaceModalProps> = ({
     }
   };
 
-  const getAvailableSpaceCodesForCurrentSelection = (): string[] => {
+const getAvailableSpaceCodesForCurrentSelection = (): string[] => {
+  // Get all possible codes for this space type/zone
+  let allPossibleCodes: string[];
   if (formData.spaceType === 'ຫ້ອງເຊົ່າ' && formData.zone) {
-    return getRoomCodesByZone(formData.zone);
+    allPossibleCodes = getRoomCodesByZone(formData.zone);
+  } else {
+    allPossibleCodes = getSpaceCodesByType(formData.spaceType);
   }
-  return getSpaceCodesByType(formData.spaceType);
+
+  // Get existing space codes from your spaces data (assuming you have access to spaces array)
+  const existingCodes = spaces.map(space => space.spaceCode);
+  
+  // If editing, allow the current space's code to appear
+  const currentSpaceCode = editingSpace?.spaceCode;
+  
+  // Filter out existing codes, but keep current code if editing
+  return allPossibleCodes.filter(code => {
+    if (currentSpaceCode && code === currentSpaceCode) {
+      return true; // Keep current space code when editing
+    }
+    return !existingCodes.includes(code); // Exclude all other existing codes
+  });
 };
 
 const getSpaceCodePlaceholder = (): string => {
@@ -377,13 +398,11 @@ const handleAutoSuggestSpaceCode = () => {
                 />
 
                 {/* Datalist for autocomplete */}
-                <datalist
-                  id={`spaceCodes-${formData.spaceType}-${formData.zone}`}
-                >
-                  {getAvailableSpaceCodesForCurrentSelection().map((code) => (
-                    <option key={code} value={code} />
-                  ))}
-                </datalist>
+                <datalist id={`spaceCodes-${formData.spaceType}-${formData.zone}`}>
+  {getAvailableSpaceCodesForCurrentSelection().map((code) => (
+    <option key={code} value={code} />
+  ))}
+</datalist>
 
                 {/* Auto-suggest button */}
                 <button

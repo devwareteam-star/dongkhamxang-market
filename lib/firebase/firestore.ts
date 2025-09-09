@@ -25,7 +25,7 @@ export class FirestoreService {
     this.collectionName = collectionName;
   }
 
-  // Create a new document
+
 // Create a new document
 async create(data: any, customId?: string) {
   try {
@@ -200,6 +200,9 @@ async update(id: string, data: any) {
       case 'contracts':
         return 'contractId';
       case 'payments':
+      case 'dailyPayments':
+      case 'monthlyPayments':
+      case 'yearlyPayments':
         return 'paymentId';
       case 'bills':
         return 'billId';
@@ -211,6 +214,7 @@ async update(id: string, data: any) {
         return 'id'; // Fallback for legacy collections
     }
   }
+  
 
   // Helper method to get documents by tenant ID
   async getByTenantId(tenantId: string) {
@@ -263,11 +267,12 @@ async update(id: string, data: any) {
     }
   }
 
-  // Helper method to get pending payments
+  // Helper method to get pending payments (updated for all payment collections)
   async getPendingPayments() {
     try {
-      if (this.collectionName !== 'payments') {
-        throw new Error('getPendingPayments can only be called on payments service');
+      const validCollections = ['payments', 'dailyPayments', 'monthlyPayments', 'yearlyPayments'];
+      if (!validCollections.includes(this.collectionName)) {
+        throw new Error('getPendingPayments can only be called on payment collections');
       }
       return this.getAll([where('paymentStatus', '==', 'ລໍຖ້າ'), orderBy('dueDate', 'asc')]);
     } catch (error) {
@@ -276,15 +281,44 @@ async update(id: string, data: any) {
     }
   }
 
-  // Helper method to get overdue payments
+  // Helper method to get overdue payments (updated for all payment collections)
   async getOverduePayments() {
     try {
-      if (this.collectionName !== 'payments') {
-        throw new Error('getOverduePayments can only be called on payments service');
+      const validCollections = ['payments', 'dailyPayments', 'monthlyPayments', 'yearlyPayments'];
+      if (!validCollections.includes(this.collectionName)) {
+        throw new Error('getOverduePayments can only be called on payment collections');
       }
       return this.getAll([where('paymentStatus', '==', 'ເກີນກຳນົດ'), orderBy('dueDate', 'asc')]);
     } catch (error) {
       console.error('Error getting overdue payments:', error);
+      throw error;
+    }
+  }
+
+  // Helper method to get payments by period (for payment collections)
+  async getPaymentsByPeriod(period: string) {
+    try {
+      const validCollections = ['payments', 'dailyPayments', 'monthlyPayments', 'yearlyPayments'];
+      if (!validCollections.includes(this.collectionName)) {
+        throw new Error('getPaymentsByPeriod can only be called on payment collections');
+      }
+      return this.getAll([where('paymentPeriod', '==', period), orderBy('dueDate', 'asc')]);
+    } catch (error) {
+      console.error('Error getting payments by period:', error);
+      throw error;
+    }
+  }
+
+  // Helper method to get payments by frequency (for payment collections)
+  async getPaymentsByFrequency(frequency: 'daily' | 'monthly' | 'yearly') {
+    try {
+      const validCollections = ['payments', 'dailyPayments', 'monthlyPayments', 'yearlyPayments'];
+      if (!validCollections.includes(this.collectionName)) {
+        throw new Error('getPaymentsByFrequency can only be called on payment collections');
+      }
+      return this.getAll([where('paymentFrequency', '==', frequency), orderBy('dueDate', 'asc')]);
+    } catch (error) {
+      console.error('Error getting payments by frequency:', error);
       throw error;
     }
   }
@@ -294,7 +328,14 @@ async update(id: string, data: any) {
 export const spacesService = new FirestoreService('spaces');           // Changed from roomsService
 export const tenantsService = new FirestoreService('tenants');
 export const contractsService = new FirestoreService('contracts');     // NEW
-export const paymentsService = new FirestoreService('payments');
+export const paymentsService = new FirestoreService('payments');       // Original payments collection
+
+// NEW: Three separate payment collections based on frequency
+export const dailyPaymentsService = new FirestoreService('dailyPayments');
+export const monthlyPaymentsService = new FirestoreService('monthlyPayments');
+export const yearlyPaymentsService = new FirestoreService('yearlyPayments');
+export const paidCollectionService = new FirestoreService('paidCollection');
+
 export const billsService = new FirestoreService('bills');             // NEW - Changed from receiptsService
 export const usersService = new FirestoreService('users');
 export const notificationsService = new FirestoreService('notifications');
