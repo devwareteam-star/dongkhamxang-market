@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState, useEffect } from "react";
+import React, { useState } from "react";
 import { useData } from "@/lib/contexts/DataContext";
 import { useAuth } from "@/lib/contexts/AuthContext";
 import { Payment } from "@/types";
@@ -11,49 +11,70 @@ import {
   CheckCircle,
   Clock,
   AlertTriangle,
-  DollarSign,
   Calendar,
   Filter,
-  User,
-  ChevronDown,
-  ChevronUp,
   Building2,
 } from "lucide-react";
 import PaymentModal from "./PaymentModal";
 import ReceiptModal from "./ReceiptModal";
 
 const PaymentCollection: React.FC = () => {
-  const { payments, spaces, tenants, updatePayment, generateReceiptNumber, loading } = useData();
+  const { 
+    payments, 
+    spaces, 
+    tenants, 
+    updatePayment, 
+    generateReceiptNumber,
+    generatePaymentsForAllTenants,
+    loading 
+  } = useData();
   const { user } = useAuth();
+  
   const [searchTerm, setSearchTerm] = useState("");
   const [statusFilter, setStatusFilter] = useState<string>("all");
-  const [activeTab, setActiveTab] = useState<string>("today");
+  const [activeTab, setActiveTab] = useState<string>("all");
+  const [spaceTypeFilter, setSpaceTypeFilter] = useState<string>("all");
   const [selectedPayment, setSelectedPayment] = useState<Payment | null>(null);
   const [isPaymentModalOpen, setIsPaymentModalOpen] = useState(false);
   const [isReceiptModalOpen, setIsReceiptModalOpen] = useState(false);
-  const [expandedTenants, setExpandedTenants] = useState<Set<string>>(new Set());
+  const [isGeneratingPayments, setIsGeneratingPayments] = useState(false);
 
-  // Get today's date for filtering
-  const today = new Date();
-  const todayString = today.toDateString();
-
-  // Helper function - moved up before usage
+  // Helper functions
   const getPaymentAmount = (payment: Payment) => {
     return payment.amountDue || payment.amount || 0;
   };
 
-  // Filter payments based on active tab
+  const getLateFeeDisplay = (payment: Payment) => {
+    if (!payment.lateFee || payment.lateFee === 0) {
+      return <span className="text-gray-400 text-xs">No late fee</span>;
+    }
+    
+    const percentage = payment.lateFeeRate ? (payment.lateFeeRate * 100).toFixed(0) : '0';
+    return (
+      <div className="text-right">
+        <div className="font-medium text-red-600 text-sm">
+          ₭{payment.lateFee.toLocaleString()}
+        </div>
+        <div className="text-xs text-red-500">
+          ({percentage}%)
+        </div>
+      </div>
+    );
+  };
+
+  const getDaysOverdue = (payment: Payment) => {
+    if (payment.status !== 'overdue') return 0;
+    const now = new Date();
+    const dueDate = new Date(payment.originalDueDate || payment.dueDate);
+    return Math.floor((now.getTime() - dueDate.getTime()) / (1000 * 60 * 60 * 24));
+  };
+
+  // Filter payments based on payment frequency tabs and filters
   const getFilteredPayments = () => {
     let filtered = payments;
 
-    // Apply tab filter
+    // Apply payment frequency tab filter
     switch (activeTab) {
-      case "today":
-        filtered = payments.filter(payment => {
-          const dueDate = new Date(payment.dueDate);
-          return dueDate.toDateString() === todayString;
-        });
-        break;
       case "daily":
         filtered = payments.filter(payment => payment.paymentType === "daily");
         break;
@@ -67,12 +88,21 @@ const PaymentCollection: React.FC = () => {
         filtered = payments;
     }
 
+    // Apply space type filter
+    if (spaceTypeFilter !== "all") {
+      filtered = filtered.filter((payment) => {
+        const space = spaces.find(s => 
+          payment.spaceIds?.includes(s.id) || s.id === payment.roomId
+        );
+        return space?.spaceType === spaceTypeFilter;
+      });
+    }
+
     // Apply search filter
     if (searchTerm) {
       filtered = filtered.filter((payment) => {
         const space = spaces.find(s => 
-          payment.spaceIds?.includes(s.id) || 
-          s.id === payment.roomId
+          payment.spaceIds?.includes(s.id) || s.id === payment.roomId
         );
         const tenant = tenants.find(t => t.tenantId === payment.tenantId);
 
@@ -91,84 +121,18 @@ const PaymentCollection: React.FC = () => {
 
   const filteredPayments = getFilteredPayments();
 
-  // Get all tenant spaces regardless of current filter to show complete tenant info
-  const getAllTenantSpaces = (tenantId: string) => {
-    // First, find the tenant
-    const tenant = tenants.find(t => t.tenantId === tenantId);
-    if (!tenant?.allSpace) {
-      console.log(`No tenant found or no spaces for tenantId: ${tenantId}`);
-      return [];
+  // Event handlers
+  const handleGeneratePayments = async (frequency: 'daily' | 'monthly' | 'yearly') => {
+    try {
+      setIsGeneratingPayments(true);
+      await generatePaymentsForAllTenants(frequency);
+      alert(`ສ້າງການຊຳລະເງິນ${frequency === 'daily' ? 'ລາຍວັນ' : frequency === 'monthly' ? 'ລາຍເດືອນ' : 'ລາຍປີ'}ສຳເລັດແລ້ວ`);
+    } catch (error) {
+      console.error('Error generating payments:', error);
+      alert('ເກີດຂໍ້ຜິດພາດໃນການສ້າງການຊຳລະເງິນ');
+    } finally {
+      setIsGeneratingPayments(false);
     }
-    
-    console.log(`Found tenant ${tenant.tenantName} with spaces:`, tenant.allSpace);
-    
-    // Get spaces directly from tenant's allSpace array
-    const tenantSpaces: any[] = [];
-    
-    tenant.allSpace.forEach(spaceId => {
-      // Look for space by both id and spaceId fields
-      const space = spaces.find(s => s.id === spaceId || s.spaceId === spaceId);
-      if (space) {
-        console.log(`Found space ${space.spaceCode} for tenant ${tenant.tenantName}`);
-        if (!tenantSpaces.find(ts => ts.id === space.id)) {
-          tenantSpaces.push(space);
-        }
-      } else {
-        console.log(`Space not found for ID: ${spaceId}`);
-      }
-    });
-    
-    console.log(`Returning ${tenantSpaces.length} spaces for tenant ${tenant.tenantName}`);
-    return tenantSpaces;
-  };
-
-  // Group payments by tenant with totals calculation
-  const groupedPayments = filteredPayments.reduce((acc, payment) => {
-    const tenant = tenants.find(t => t.tenantId === payment.tenantId);
-    const tenantKey = tenant?.tenantId || 'unknown';
-    
-    if (!acc[tenantKey]) {
-      acc[tenantKey] = {
-        tenant,
-        payments: [],
-        totals: {
-          daily: 0,
-          monthly: 0,
-          yearly: 0,
-          all: 0
-        }
-      };
-    }
-    
-    const amount = getPaymentAmount(payment);
-    acc[tenantKey].payments.push(payment);
-    
-    // Calculate totals by payment type
-    if (payment.paymentType === 'daily') {
-      acc[tenantKey].totals.daily += amount;
-    } else if (payment.paymentType === 'monthly') {
-      acc[tenantKey].totals.monthly += amount;
-    } else if (payment.paymentType === 'yearly') {
-      acc[tenantKey].totals.yearly += amount;
-    }
-    
-    acc[tenantKey].totals.all += amount;
-    
-    return acc;
-  }, {} as Record<string, { 
-    tenant: any; 
-    payments: Payment[]; 
-    totals: { daily: number; monthly: number; yearly: number; all: number }
-  }>);
-
-  const toggleTenantExpansion = (tenantId: string) => {
-    const newExpanded = new Set(expandedTenants);
-    if (newExpanded.has(tenantId)) {
-      newExpanded.delete(tenantId);
-    } else {
-      newExpanded.add(tenantId);
-    }
-    setExpandedTenants(newExpanded);
   };
 
   const handleCollectPayment = (payment: Payment) => {
@@ -207,6 +171,7 @@ const PaymentCollection: React.FC = () => {
     setIsReceiptModalOpen(true);
   };
 
+  // Status helpers
   const getStatusIcon = (status: Payment["status"]) => {
     switch (status) {
       case "paid":
@@ -240,8 +205,21 @@ const PaymentCollection: React.FC = () => {
     }
   };
 
-  const getPeriodText = (period: Payment["paymentType"]) => {
-    switch (period) {
+  const getFrequencyColor = (type: Payment["paymentType"]) => {
+    switch (type) {
+      case "daily":
+        return "bg-orange-100 text-orange-700";
+      case "monthly":
+        return "bg-green-100 text-green-700";
+      case "yearly":
+        return "bg-blue-100 text-blue-700";
+      default:
+        return "bg-gray-100 text-gray-700";
+    }
+  };
+
+  const getFrequencyText = (type: Payment["paymentType"]) => {
+    switch (type) {
       case "daily":
         return "ລາຍວັນ";
       case "monthly":
@@ -249,7 +227,7 @@ const PaymentCollection: React.FC = () => {
       case "yearly":
         return "ລາຍປີ";
       default:
-        return period;
+        return type;
     }
   };
 
@@ -269,12 +247,28 @@ const PaymentCollection: React.FC = () => {
     );
   }
 
+  // Payment Frequency Tabs - THIS IS THE CORRECT VERSION
   const tabs = [
-    { id: "today", label: "Today", count: payments.filter(p => new Date(p.dueDate).toDateString() === todayString).length },
-    { id: "all", label: "ALL", count: payments.length },
-    { id: "daily", label: "Daily", count: payments.filter(p => p.paymentType === "daily").length },
-    { id: "monthly", label: "Monthly", count: payments.filter(p => p.paymentType === "monthly").length },
-    { id: "yearly", label: "Yearly", count: payments.filter(p => p.paymentType === "yearly").length },
+    { 
+      id: "all", 
+      label: "ທັງໝົດ", 
+      count: payments.length 
+    },
+    { 
+      id: "daily", 
+      label: "ລາຍວັນ", 
+      count: payments.filter(p => p.paymentType === 'daily').length 
+    },
+    { 
+      id: "monthly", 
+      label: "ລາຍເດືອນ", 
+      count: payments.filter(p => p.paymentType === 'monthly').length 
+    },
+    { 
+      id: "yearly", 
+      label: "ລາຍປີ", 
+      count: payments.filter(p => p.paymentType === 'yearly').length 
+    },
   ];
 
   return (
@@ -287,7 +281,7 @@ const PaymentCollection: React.FC = () => {
         </p>
       </div>
 
-      {/* Tab Navigation */}
+      {/* Payment Frequency Tab Navigation */}
       <div className="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden">
         <div className="flex border-b border-gray-200">
           {tabs.map((tab) => (
@@ -316,7 +310,7 @@ const PaymentCollection: React.FC = () => {
 
         {/* Filters */}
         <div className="p-6 bg-gray-50">
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+          <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
             <div className="relative">
               <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 w-5 h-5 text-gray-400" />
               <input
@@ -326,6 +320,21 @@ const PaymentCollection: React.FC = () => {
                 onChange={(e) => setSearchTerm(e.target.value)}
                 className="w-full pl-10 pr-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
               />
+            </div>
+
+            <div className="relative">
+              <Building2 className="absolute left-3 top-1/2 transform -translate-y-1/2 w-5 h-5 text-gray-400" />
+              <select
+                value={spaceTypeFilter}
+                onChange={(e) => setSpaceTypeFilter(e.target.value)}
+                className="w-full pl-10 pr-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent appearance-none"
+              >
+                <option value="all">ປະເພດພື້ນທີ່ທັງໝົດ</option>
+                <option value="ໂຕະ">ໂຕະ</option>
+                <option value="ຫ້ອງເຊົ່າ">ຫ້ອງເຊົ່າ</option>
+                <option value="ປ້າຍ">ປ້າຍ</option>
+                <option value="ບູດ">ບູດ</option>
+              </select>
             </div>
 
             <div className="relative">
@@ -350,294 +359,180 @@ const PaymentCollection: React.FC = () => {
         </div>
       </div>
 
-      {/* Payment Lists Grouped by Tenant */}
-      <div className="space-y-4">
-        {Object.entries(groupedPayments).map(([tenantKey, group]) => {
-          return (
-            <div key={tenantKey} className="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden">
-              {/* Tenant Header with Totals */}
-              <div className="bg-gradient-to-r from-gray-50 to-gray-100 px-6 py-4 border-b border-gray-200">
-                <div className="flex items-center justify-between">
-                  <div className="flex items-center space-x-4">
-                    <div className="bg-blue-100 p-2 rounded-lg">
-                      <User className="w-5 h-5 text-blue-600" />
-                    </div>
+      {/* Payment Generation Section */}
+      <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
+        <div className="flex items-center justify-between mb-4">
+          <div>
+            <h3 className="text-lg font-semibold text-gray-900">ສ້າງການຊຳລະເງິນ</h3>
+            <p className="text-sm text-gray-600">ສ້າງການຊຳລະເງິນໃໝ່ສຳລັບຜູ້ເຊົ່າທັງໝົດ</p>
+          </div>
+        </div>
+        
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+          <button
+            onClick={() => handleGeneratePayments('daily')}
+            disabled={isGeneratingPayments}
+            className="flex items-center justify-center space-x-2 px-4 py-3 bg-orange-50 hover:bg-orange-100 border border-orange-200 rounded-lg transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+          >
+            <Calendar className="w-5 h-5 text-orange-600" />
+            <span className="font-medium text-orange-700">
+              {isGeneratingPayments ? 'ກຳລັງສ້າງ...' : 'ສ້າງການຊຳລະລາຍວັນ'}
+            </span>
+          </button>
+          
+          <button
+            onClick={() => handleGeneratePayments('monthly')}
+            disabled={isGeneratingPayments}
+            className="flex items-center justify-center space-x-2 px-4 py-3 bg-green-50 hover:bg-green-100 border border-green-200 rounded-lg transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+          >
+            <Calendar className="w-5 h-5 text-green-600" />
+            <span className="font-medium text-green-700">
+              {isGeneratingPayments ? 'ກຳລັງສ້າງ...' : 'ສ້າງການຊຳລະລາຍເດືອນ'}
+            </span>
+          </button>
+          
+          <button
+            onClick={() => handleGeneratePayments('yearly')}
+            disabled={isGeneratingPayments}
+            className="flex items-center justify-center space-x-2 px-4 py-3 bg-blue-50 hover:bg-blue-100 border border-blue-200 rounded-lg transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+          >
+            <Calendar className="w-5 h-5 text-blue-600" />
+            <span className="font-medium text-blue-700">
+              {isGeneratingPayments ? 'ກຳລັງສ້າງ...' : 'ສ້າງການຊຳລະລາຍປີ'}
+            </span>
+          </button>
+        </div>
+        
+        <div className="mt-4 text-xs text-gray-500 bg-gray-50 rounded-lg p-3">
+          <strong>ໝາຍເຫດ:</strong> ການສ້າງການຊຳລະຈະສ້າງພຽງສຳລັບພື້ນທີ່ທີ່ບໍ່ມີການຊຳລະທີ່ຍັງບໍ່ໄດ້ຈ່າຍ
+        </div>
+      </div>
 
-              {/* All Tenant Spaces Display - organized by payment type */}
-              <div className="px-6 py-4 bg-gray-50 border-b border-gray-200">
-                <h4 className="font-medium text-gray-900 mb-3">ພື້ນທີ່ທັງໝົດຂອງຜູ້ເຊົ່າ</h4>
-                <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-                  {/* Daily Spaces */}
-                  <div className="bg-orange-50 rounded-lg p-3">
-                    <div className="flex items-center space-x-2 mb-2">
-                      <div className="w-3 h-3 bg-orange-500 rounded-full"></div>
-                      <span className="text-sm font-medium text-orange-700">ລາຍວັນ</span>
-                    </div>
-                    <div className="space-y-1">
-                      {getAllTenantSpaces(tenantKey)
-                        .filter(space => {
-                          const spacePayments = payments.filter(p => 
-                            (p.spaceIds?.includes(space.id) || p.roomId === space.id) && 
-                            p.tenantId === tenantKey &&
-                            p.paymentType === 'daily'
-                          );
-                          return spacePayments.length > 0;
-                        })
-                        .map((space, index) => (
-                          <div key={`daily-${space.id}-${index}`} className="text-xs text-orange-600">
-                            {space.spaceCode} ({space.spaceType})
-                          </div>
-                        ))}
-                      {getAllTenantSpaces(tenantKey).filter(space => {
-                        const spacePayments = payments.filter(p => 
-                          (p.spaceIds?.includes(space.id) || p.roomId === space.id) && 
-                          p.tenantId === tenantKey &&
-                          p.paymentType === 'daily'
-                        );
-                        return spacePayments.length > 0;
-                      }).length === 0 && (
-                        <div className="text-xs text-gray-400">ບໍ່ມີ</div>
-                      )}
-                    </div>
-                  </div>
+      {/* Payment Table */}
+      <div className="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden">
+        <div className="overflow-x-auto">
+          <table className="w-full">
+            <thead className="bg-gray-50 border-b border-gray-200">
+              <tr>
+                <th className="text-left py-3 px-4 font-medium text-gray-700 text-sm">ສະຖານະ</th>
+                <th className="text-left py-3 px-4 font-medium text-gray-700 text-sm">ພື້ນທີ່</th>
+                <th className="text-left py-3 px-4 font-medium text-gray-700 text-sm">ຜູ້ເຊົ່າ</th>
+                <th className="text-left py-3 px-4 font-medium text-gray-700 text-sm">ຮອບຊຳລະ</th>
+                <th className="text-right py-3 px-4 font-medium text-gray-700 text-sm">ເງິນຕົ້ນ</th>
+                <th className="text-right py-3 px-4 font-medium text-gray-700 text-sm">ຄ່າປັບ</th>
+                <th className="text-right py-3 px-4 font-medium text-gray-700 text-sm">ລວມທັງໝົດ</th>
+                <th className="text-center py-3 px-4 font-medium text-gray-700 text-sm">ເກີນ (ວັນ)</th>
+                <th className="text-left py-3 px-4 font-medium text-gray-700 text-sm">ກຳນົດຊຳລະ</th>
+                <th className="text-center py-3 px-4 font-medium text-gray-700 text-sm">ການດຳເນີນການ</th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-gray-100">
+              {filteredPayments.map((payment) => {
+                const space = spaces.find(s => 
+                  payment.spaceIds?.includes(s.id) || s.id === payment.roomId
+                );
+                const tenant = tenants.find(t => t.tenantId === payment.tenantId);
+                const daysOverdue = getDaysOverdue(payment);
+                const originalAmount = payment.originalAmount || getPaymentAmount(payment);
+                const totalAmount = originalAmount + (payment.lateFee || 0);
 
-                  {/* Monthly Spaces */}
-                  <div className="bg-green-50 rounded-lg p-3">
-                    <div className="flex items-center space-x-2 mb-2">
-                      <div className="w-3 h-3 bg-green-500 rounded-full"></div>
-                      <span className="text-sm font-medium text-green-700">ລາຍເດືອນ</span>
-                    </div>
-                    <div className="space-y-1">
-                      {getAllTenantSpaces(tenantKey)
-                        .filter(space => {
-                          const spacePayments = payments.filter(p => 
-                            (p.spaceIds?.includes(space.id) || p.roomId === space.id) && 
-                            p.tenantId === tenantKey &&
-                            p.paymentType === 'monthly'
-                          );
-                          return spacePayments.length > 0;
-                        })
-                        .map((space, index) => (
-                          <div key={`monthly-${space.id}-${index}`} className="text-xs text-green-600">
-                            {space.spaceCode} ({space.spaceType})
-                          </div>
-                        ))}
-                      {getAllTenantSpaces(tenantKey).filter(space => {
-                        const spacePayments = payments.filter(p => 
-                          (p.spaceIds?.includes(space.id) || p.roomId === space.id) && 
-                          p.tenantId === tenantKey &&
-                          p.paymentType === 'monthly'
-                        );
-                        return spacePayments.length > 0;
-                      }).length === 0 && (
-                        <div className="text-xs text-gray-400">ບໍ່ມີ</div>
-                      )}
-                    </div>
-                  </div>
-
-                  {/* Yearly Spaces */}
-                  <div className="bg-blue-50 rounded-lg p-3">
-                    <div className="flex items-center space-x-2 mb-2">
-                      <div className="w-3 h-3 bg-blue-500 rounded-full"></div>
-                      <span className="text-sm font-medium text-blue-700">ລາຍປີ</span>
-                    </div>
-                    <div className="space-y-1">
-                      {getAllTenantSpaces(tenantKey)
-                        .filter(space => {
-                          const spacePayments = payments.filter(p => 
-                            (p.spaceIds?.includes(space.id) || p.roomId === space.id) && 
-                            p.tenantId === tenantKey &&
-                            p.paymentType === 'yearly'
-                          );
-                          return spacePayments.length > 0;
-                        })
-                        .map((space, index) => (
-                          <div key={`yearly-${space.id}-${index}`} className="text-xs text-blue-600">
-                            {space.spaceCode} ({space.spaceType})
-                          </div>
-                        ))}
-                      {getAllTenantSpaces(tenantKey).filter(space => {
-                        const spacePayments = payments.filter(p => 
-                          (p.spaceIds?.includes(space.id) || p.roomId === space.id) && 
-                          p.tenantId === tenantKey &&
-                          p.paymentType === 'yearly'
-                        );
-                        return spacePayments.length > 0;
-                      }).length === 0 && (
-                        <div className="text-xs text-gray-400">ບໍ່ມີ</div>
-                      )}
-                    </div>
-                  </div>
-
-                  {/* All Spaces Summary */}
-                  <div className="bg-purple-50 rounded-lg p-3">
-                    <div className="flex items-center space-x-2 mb-2">
-                      <div className="w-3 h-3 bg-purple-500 rounded-full"></div>
-                      <span className="text-sm font-medium text-purple-700">ທັງໝົດ</span>
-                    </div>
-                    <div className="space-y-1">
-                      {getAllTenantSpaces(tenantKey).map((space: any, index: number) => (
-                        <div key={`all-${space.id}-${index}`} className="text-xs text-purple-600">
-                          {space.spaceCode} ({space.spaceType})
+                return (
+                  <tr key={payment.id || payment.paymentId} className="hover:bg-gray-50 transition-colors">
+                    <td className="py-3 px-4">
+                      <div className="flex items-center space-x-2">
+                        {getStatusIcon(payment.status)}
+                        <span className={`px-2 py-1 text-xs font-medium rounded-full ${getStatusColor(payment.status)}`}>
+                          {getStatusText(payment.status)}
+                        </span>
+                      </div>
+                    </td>
+                    
+                    <td className="py-3 px-4">
+                      <div>
+                        <div className="font-medium text-gray-900">{space?.spaceCode || 'N/A'}</div>
+                        <div className="text-xs text-gray-500 flex items-center">
+                          <Building2 className="w-3 h-3 mr-1" />
+                          {space?.spaceType || 'N/A'}
                         </div>
-                      ))}
-                      {getAllTenantSpaces(tenantKey).length === 0 && (
-                        <div className="text-xs text-gray-400">ບໍ່ມີ</div>
+                      </div>
+                    </td>
+                    
+                    <td className="py-3 px-4">
+                      <div className="font-medium text-gray-900">
+                        {tenant?.tenantName || 'N/A'}
+                      </div>
+                      <div className="text-xs text-gray-500">
+                        {tenant?.contact}
+                      </div>
+                    </td>
+                    
+                    <td className="py-3 px-4">
+                      <span className={`px-2 py-1 text-xs font-medium rounded-full ${getFrequencyColor(payment.paymentType)}`}>
+                        {getFrequencyText(payment.paymentType)}
+                      </span>
+                    </td>
+                    
+                    <td className="py-3 px-4 text-right">
+                      <div className="font-medium text-gray-900">
+                        ₭{originalAmount.toLocaleString()}
+                      </div>
+                    </td>
+                    
+                    <td className="py-3 px-4 text-right">
+                      {getLateFeeDisplay(payment)}
+                    </td>
+                    
+                    <td className="py-3 px-4 text-right">
+                      <div className="font-bold text-gray-900">
+                        ₭{totalAmount.toLocaleString()}
+                      </div>
+                    </td>
+                    
+                    <td className="py-3 px-4 text-center">
+                      {daysOverdue > 0 ? (
+                        <span className="px-2 py-1 text-xs font-medium bg-red-100 text-red-800 rounded-full">
+                          {daysOverdue}
+                        </span>
+                      ) : (
+                        <span className="text-gray-400 text-xs">-</span>
                       )}
-                    </div>
-                  </div>
-                </div>
-              </div>
-                    <div>
-                      <h3 className="font-semibold text-gray-900 text-lg">
-                        {group.tenant?.tenantName || "ບໍ່ລະບຸ"}
-                      </h3>
-                      <p className="text-sm text-gray-600">
-                        {group.tenant?.contact && `📞 ${group.tenant.contact}`} • {group.payments.length} ລາຍການ
-                      </p>
-                    </div>
-                  </div>
-                  
-                  {/* Totals Summary */}
-                  <div className="grid grid-cols-4 gap-4 text-sm">
-                    <div className="bg-orange-50 px-3 py-2 rounded-lg text-center">
-                      <div className="text-orange-600 font-medium">ລາຍວັນ</div>
-                      <div className="text-orange-800 font-bold">₭{group.totals.daily.toLocaleString()}</div>
-                    </div>
-                    <div className="bg-green-50 px-3 py-2 rounded-lg text-center">
-                      <div className="text-green-600 font-medium">ລາຍເດືອນ</div>
-                      <div className="text-green-800 font-bold">₭{group.totals.monthly.toLocaleString()}</div>
-                    </div>
-                    <div className="bg-blue-50 px-3 py-2 rounded-lg text-center">
-                      <div className="text-blue-600 font-medium">ລາຍປີ</div>
-                      <div className="text-blue-800 font-bold">₭{group.totals.yearly.toLocaleString()}</div>
-                    </div>
-                    <div className="bg-purple-50 px-3 py-2 rounded-lg text-center">
-                      <div className="text-purple-600 font-medium">ລວມທັງໝົດ</div>
-                      <div className="text-purple-800 font-bold">₭{group.totals.all.toLocaleString()}</div>
-                    </div>
-                  </div>
-                </div>
-              </div>
-
-              {/* Payments Table */}
-              <div className="overflow-x-auto">
-                <table className="w-full">
-                  <thead className="bg-gray-50 border-b border-gray-200">
-                    <tr>
-                      <th className="text-left py-3 px-4 font-medium text-gray-700 text-sm">ສະຖານະ</th>
-                      <th className="text-left py-3 px-4 font-medium text-gray-700 text-sm">ພື້ນທີ່</th>
-                      <th className="text-left py-3 px-4 font-medium text-gray-700 text-sm">ຮອບຊຳລະ</th>
-                      <th className="text-left py-3 px-4 font-medium text-gray-700 text-sm">ຈຳນວນເງິນ</th>
-                      <th className="text-left py-3 px-4 font-medium text-gray-700 text-sm">ກຳນົດຊຳລະ</th>
-                      <th className="text-left py-3 px-4 font-medium text-gray-700 text-sm">ການດຳເນີນການ</th>
-                    </tr>
-                  </thead>
-                  <tbody className="divide-y divide-gray-100">
-                    {group.payments.map((payment) => {
-                      const space = spaces.find(s => 
-                        payment.spaceIds?.includes(s.id) || 
-                        s.id === payment.roomId
-                      );
-                      
-                      const isOverdue = payment.status === "overdue";
-                      const dueDate = new Date(payment.dueDate);
-                      const now = new Date();
-                      const daysUntilDue = Math.floor((dueDate.getTime() - now.getTime()) / (1000 * 60 * 60 * 24));
-                      const daysPastDue = isOverdue ? Math.floor((now.getTime() - dueDate.getTime()) / (1000 * 60 * 60 * 24)) : 0;
-
-                      return (
-                        <tr key={payment.id || payment.paymentId} className="hover:bg-gray-50 transition-colors">
-                          <td className="py-3 px-4">
-                            <div className="flex items-center space-x-2">
-                              {getStatusIcon(payment.status)}
-                              <span className={`px-2 py-1 text-xs font-medium rounded-full ${getStatusColor(payment.status)}`}>
-                                {getStatusText(payment.status)}
-                              </span>
-                            </div>
-                          </td>
-                          
-                          <td className="py-3 px-4">
-                            <div>
-                              <div className="font-medium text-gray-900">{space?.spaceCode || 'N/A'}</div>
-                              <div className="text-xs text-gray-500 flex items-center">
-                                <Building2 className="w-3 h-3 mr-1" />
-                                {space?.spaceType || 'N/A'}
-                              </div>
-                            </div>
-                          </td>
-                          
-                          <td className="py-3 px-4">
-                            <span className={`px-2 py-1 text-xs font-medium rounded-full ${
-                              payment.paymentType === 'daily' ? 'bg-orange-100 text-orange-700' :
-                              payment.paymentType === 'monthly' ? 'bg-green-100 text-green-700' :
-                              'bg-blue-100 text-blue-700'
-                            }`}>
-                              {getPeriodText(payment.paymentType)}
-                            </span>
-                          </td>
-                          
-                          <td className="py-3 px-4">
-                            <div className="font-medium text-gray-900">
-                              ₭{getPaymentAmount(payment).toLocaleString()}
-                            </div>
-                            {payment.lateFee && payment.lateFee > 0 && (
-                              <div className="text-xs text-red-600">
-                                + ຄ່າປັບ ₭{payment.lateFee.toLocaleString()}
-                              </div>
-                            )}
-                          </td>
-                          
-                          <td className="py-3 px-4">
-                            <div className="text-sm text-gray-900">
-                              {dueDate.toLocaleDateString("lo-LA")}
-                            </div>
-                            {isOverdue && (
-                              <div className="text-xs text-red-600 font-medium">
-                                ເກີນ {daysPastDue} ວັນ
-                              </div>
-                            )}
-                            {!isOverdue && payment.status === "pending" && daysUntilDue <= 7 && daysUntilDue >= 0 && (
-                              <div className="text-xs text-yellow-600 font-medium">
-                                ອີກ {daysUntilDue} ວັນ
-                              </div>
-                            )}
-                          </td>
-                          
-                          <td className="py-3 px-4">
-                            {payment.status !== "paid" ? (
-                              <button
-                                onClick={() => handleCollectPayment(payment)}
-                                className={`flex items-center space-x-1 px-3 py-1 rounded-lg transition-colors text-xs font-medium ${
-                                  isOverdue
-                                    ? "bg-red-50 hover:bg-red-100 text-red-700"
-                                    : daysUntilDue <= 3 && daysUntilDue >= 0
-                                    ? "bg-yellow-50 hover:bg-yellow-100 text-yellow-700"
-                                    : "bg-green-50 hover:bg-green-100 text-green-700"
-                                }`}
-                              >
-                                <CreditCard className="w-3 h-3" />
-                                <span>ເກັບເງິນ</span>
-                              </button>
-                            ) : (
-                              <button
-                                onClick={() => handlePrintReceipt(payment)}
-                                className="flex items-center space-x-1 px-3 py-1 bg-blue-50 hover:bg-blue-100 text-blue-700 rounded-lg transition-colors text-xs font-medium"
-                              >
-                                <Printer className="w-3 h-3" />
-                                <span>ພິມໃບເສັດ</span>
-                              </button>
-                            )}
-                          </td>
-                        </tr>
-                      );
-                    })}
-                  </tbody>
-                </table>
-              </div>
-            </div>
-          );
-        })}
+                    </td>
+                    
+                    <td className="py-3 px-4">
+                      <div className="text-sm text-gray-900">
+                        {new Date(payment.dueDate).toLocaleDateString("lo-LA")}
+                      </div>
+                    </td>
+                    
+                    <td className="py-3 px-4 text-center">
+                      {payment.status !== "paid" ? (
+                        <button
+                          onClick={() => handleCollectPayment(payment)}
+                          className={`flex items-center space-x-1 px-3 py-1 rounded-lg transition-colors text-xs font-medium ${
+                            payment.status === 'overdue'
+                              ? "bg-red-50 hover:bg-red-100 text-red-700"
+                              : "bg-green-50 hover:bg-green-100 text-green-700"
+                          }`}
+                        >
+                          <CreditCard className="w-3 h-3" />
+                          <span>ເກັບເງິນ</span>
+                        </button>
+                      ) : (
+                        <button
+                          onClick={() => handlePrintReceipt(payment)}
+                          className="flex items-center space-x-1 px-3 py-1 bg-blue-50 hover:bg-blue-100 text-blue-700 rounded-lg transition-colors text-xs font-medium"
+                        >
+                          <Printer className="w-3 h-3" />
+                          <span>ພິມໃບເສັດ</span>
+                        </button>
+                      )}
+                    </td>
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
+        </div>
       </div>
 
       {filteredPayments.length === 0 && (
@@ -650,7 +545,7 @@ const PaymentCollection: React.FC = () => {
         </div>
       )}
 
-      {/* Payment Modal */}
+      {/* Modals */}
       <PaymentModal
         isOpen={isPaymentModalOpen}
         payment={selectedPayment}
@@ -663,7 +558,6 @@ const PaymentCollection: React.FC = () => {
         onSubmit={handlePaymentCollectedFromModal}
       />
 
-      {/* Receipt Modal */}
       {isReceiptModalOpen && selectedPayment && (
         <ReceiptModal
           isOpen={isReceiptModalOpen}

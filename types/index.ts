@@ -23,6 +23,16 @@ export interface Space {
   createdBy: string;
   paymentFrequency?: 'daily' | 'monthly' | 'yearly';
   originalRentAmount?: number;
+
+   paymentStatus?: {
+    currentStatus: 'no_tenant' | 'pending' | 'paid' | 'overdue';
+    currentPeriodPaid: boolean;
+    nextDueDate?: Date;
+    lateFee: number;
+    lateFeeApplied: boolean;
+    daysOverdue: number;
+    lastUpdated: Date;
+  };
   
 
 }
@@ -72,7 +82,7 @@ export interface ContractSpace {
 }
 
 export interface Payment {
-paymentId: string;
+  paymentId: string;
   tenantId: string; // Business ID like "bay001" 
   spaceIds: string[]; // Firebase document IDs
   paymentPeriod: string; // YYYY-MM format
@@ -85,13 +95,20 @@ paymentId: string;
   paymentDate?: Date;
   paymentMethod?: 'ເງິນສົດ' | 'ໂອນເງິນ' | 'BCEL' | 'JDB';
   paymentStatus: 'ລໍຖ້າ' | 'ຈ່າຍແລ້ວ' | 'ເກີນກຳນົດ' | 'ຈ່າຍບາງສ່ວນ' | undefined;
-  
-  // Optional fields
-  lateFee?: number;
+
+    // Late fee structure fields (add these)
+  originalAmount: number;        // Base rent amount (never changes)
+  lateFee: number;              // Current late fee amount
+  lateFeeRate: number | null;   // Applied rate (0.05, 0.10, 0.25, or null)
+  lateFeeApplied: boolean;      // Whether any late fee has been applied
+  originalDueDate: Date;        // Original due date (never changes)
+
+  // Add these back
   daysOverdue?: number;
   receiptNumber?: string;
   processedBy?: string;
   notes?: string;
+  
   
   // Timestamps
   createdAt: Date;
@@ -312,6 +329,15 @@ export interface SystemSettings {
     ipRestriction: boolean;
     allowedIPs: string[];
   };
+
+  // Add late fee configuration
+  lateFees: {
+    tier1: { days: 7, rate: 0.05 };   // 5% after 7 days
+    tier2: { days: 30, rate: 0.10 };  // 10% after 30 days
+    tier3: { days: 90, rate: 0.25 };  // 25% after 90 days
+    enableLateFees: boolean;
+    gracePeriodDays: number;           // Days before late fees start
+  };
 }
 
 // =============================================================================
@@ -405,3 +431,28 @@ export const roomToSpace = (room: Room): Space => ({
   updatedAt: new Date(),
   createdBy: 'migration'
 });
+
+// =============================================================================
+// LATE FEE HELPER FUNCTIONS
+// =============================================================================
+
+export const calculateLateFee = (originalAmount: number, daysOverdue: number, settings: SystemSettings): { lateFee: number; rate: number | null } => {
+  if (!settings.lateFees.enableLateFees || daysOverdue <= settings.lateFees.gracePeriodDays) {
+    return { lateFee: 0, rate: null };
+  }
+  
+  let rate = null;
+  if (daysOverdue >= settings.lateFees.tier3.days) rate = settings.lateFees.tier3.rate;
+  else if (daysOverdue >= settings.lateFees.tier2.days) rate = settings.lateFees.tier2.rate;
+  else if (daysOverdue >= settings.lateFees.tier1.days) rate = settings.lateFees.tier1.rate;
+  
+  return { 
+    lateFee: rate ? Math.round(originalAmount * rate) : 0, 
+    rate 
+  };
+};
+
+export const calculateDaysOverdue = (originalDueDate: Date, currentDate: Date = new Date()): number => {
+  const diffTime = currentDate.getTime() - originalDueDate.getTime();
+  return Math.max(0, Math.floor(diffTime / (1000 * 60 * 60 * 24)));
+};

@@ -10,6 +10,8 @@ import {
   Notification,
   SystemSettings,
   DashboardStats,
+  calculateLateFee,  // ADD
+  calculateDaysOverdue  // ADD
 } from "@/types";
 import {
   spacesService,
@@ -30,6 +32,8 @@ interface DataContextType {
   notifications: Notification[];
   settings: SystemSettings;
   loading: boolean;
+  // ADD: Late fee processing
+  processLateFees: () => Promise<void>;
 
   // Space operations
   addSpace: (
@@ -109,9 +113,18 @@ const defaultSettings: SystemSettings = {
     taxId: "1234567890",
   },
   defaultRates: {
-    dailyRate: 50000, // 50,000 KIP
-    monthlyRate: 1200000, // 1,200,000 KIP
-    yearlyRate: 12000000, // 12,000,000 KIP
+    dailyRate: 50000,
+    monthlyRate: 1200000,
+    yearlyRate: 12000000,
+  },
+
+  // Add late fee defaults
+  lateFees: {
+    tier1: { days: 7, rate: 0.05 },
+    tier2: { days: 30, rate: 0.10 },
+    tier3: { days: 90, rate: 0.25 },
+    enableLateFees: true,
+    gracePeriodDays: 0
   },
   notifications: {
     enableEmail: true,
@@ -294,7 +307,7 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({
   // Payment generation functions
 const generatePaymentsForTenant = async (
   tenantBusinessId: string, 
-  paymentFrequency?: 'daily' | 'monthly' | 'yearly', // Make optional
+  paymentFrequency?: 'daily' | 'monthly' | 'yearly',
   dueDate: Date = new Date(),
   providedTenant?: Tenant
 ) => {
@@ -305,50 +318,127 @@ const generatePaymentsForTenant = async (
     const tenantSpaces = spaces.filter(s => tenant.allSpace?.includes(s.id));
     if (tenantSpaces.length === 0) throw new Error(`No spaces found for tenant ${tenantBusinessId}`);
 
-    // Group spaces by their payment frequency
-    const spacesByFrequency = tenantSpaces.reduce((acc, space) => {
+    // CHANGE: Generate individual payment for each space
+    for (const space of tenantSpaces) {
       const frequency = space.paymentFrequency || 'monthly';
-      if (!acc[frequency]) acc[frequency] = [];
-      acc[frequency].push(space);
-      return acc;
-    }, {} as Record<string, Space[]>);
-
-    // Generate separate payment for each frequency
-    for (const [frequency, spacesForFrequency] of Object.entries(spacesByFrequency)) {
+      
       // Skip if specific frequency requested and doesn't match
       if (paymentFrequency && frequency !== paymentFrequency) continue;
 
-      const monthlyTotal = spacesForFrequency.reduce((sum, space) => sum + space.baseRentMonthly, 0);
-      let amountDue = monthlyTotal;
-      
-      if (frequency === 'yearly') amountDue = monthlyTotal * 12;
-      else if (frequency === 'daily') amountDue = Math.round(monthlyTotal / 30);
+      // CHECK: Skip if unpaid payment already exists for this space
+      const existingUnpaidPayment = payments.find(p => 
+        p.spaceIds.includes(space.id) && 
+        p.paymentStatus !== 'ຈ່າຍແລ້ວ' &&
+        p.tenantId === tenantBusinessId
+      );
+
+      if (existingUnpaidPayment) {
+        console.log(`Skipping space ${space.spaceCode} - unpaid payment exists`);
+        continue;
+      }
+
+      // Calculate amount based on frequency
+      let amountDue = space.baseRentMonthly;
+      if (frequency === 'yearly') amountDue = space.baseRentMonthly * 12;
+      else if (frequency === 'daily') amountDue = Math.round(space.baseRentMonthly / 30);
 
       const paymentData = {
         contractId: '',
-  spaceIds: spacesForFrequency.map(s => s.id),
-  tenantId: tenantBusinessId,
-  paymentPeriod: `${dueDate.getFullYear()}-${String(dueDate.getMonth() + 1).padStart(2, '0')}`,
-  dueDate,
-  amountDue,
-  paymentStatus: 'ລໍຖ້າ' as const,
-  paymentFrequency: frequency as 'daily' | 'monthly' | 'yearly',
-  notes: `${frequency} payment for ${spacesForFrequency.map(s => s.spaceCode).join(', ')}`,
-  paymentConfirmed: false,
-  
-  // Add missing legacy fields required by Payment interface
-  id: '', // Will be set by addPayment
-  roomId: spacesForFrequency[0]?.id || '', // Legacy field - use first space ID
-  amount: amountDue, // Legacy field - same as amountDue
-  status: 'pending' as const, // Legacy field - English version of paymentStatus
-  paymentType: frequency as 'daily' | 'monthly' | 'yearly', // Legacy field - same as paymentFrequency
+        spaceIds: [space.id], // CHANGE: Single space per payment
+        tenantId: tenantBusinessId,
+        paymentPeriod: `${dueDate.getFullYear()}-${String(dueDate.getMonth() + 1).padStart(2, '0')}`,
+        dueDate,
+        originalDueDate: dueDate, // ADD: Original due date for late fee calculation
+        amountDue,
+        originalAmount: amountDue, // ADD: Original amount (never changes)
+        lateFee: 0, // ADD: Initial late fee
+        lateFeeRate: null, // ADD: Initial rate
+        lateFeeApplied: false, // ADD: Initial flag
+        paymentStatus: 'ລໍຖ້າ' as const,
+        paymentFrequency: frequency as 'daily' | 'monthly' | 'yearly',
+        notes: `${frequency} payment for ${space.spaceCode}`,
+        
+        // Legacy fields
+        id: '',
+        roomId: space.id,
+        amount: amountDue,
+        status: 'pending' as const,
+        paymentType: frequency as 'daily' | 'monthly' | 'yearly',
       };
 
       await addPayment(paymentData);
+
+      // UPDATE: Initialize space payment status
+      const spaceUpdate = {
+        paymentStatus: {
+          currentStatus: 'pending' as const,
+          currentPeriodPaid: false,
+          nextDueDate: dueDate,
+          lateFee: 0,
+          lateFeeApplied: false,
+          daysOverdue: 0,
+          lastUpdated: new Date()
+        }
+      };
+      
+      await updateSpace(space.id, spaceUpdate);
     }
   } catch (error) {
     console.error('Error generating payment for tenant:', error);
     throw error;
+  }
+};
+
+// NEW: Daily late fee processing function
+const processLateFees = async () => {
+  try {
+    if (!settings.lateFees.enableLateFees) return;
+
+    const unpaidPayments = payments.filter(p => 
+      p.paymentStatus === 'ລໍຖ້າ' || p.paymentStatus === 'ເກີນກຳນົດ'
+    );
+
+    for (const payment of unpaidPayments) {
+      const daysOverdue = calculateDaysOverdue(payment.originalDueDate);
+      
+      if (daysOverdue > settings.lateFees.gracePeriodDays) {
+        const { lateFee, rate } = calculateLateFee(
+          payment.originalAmount, 
+          daysOverdue, 
+          settings
+        );
+
+        // Only update if late fee changed
+        if (lateFee !== payment.lateFee || rate !== payment.lateFeeRate) {
+          await updatePayment(payment.paymentId || payment.id, {
+            lateFee,
+            lateFeeRate: rate,
+            lateFeeApplied: lateFee > 0,
+            amountDue: payment.originalAmount + lateFee,
+            daysOverdue,
+            paymentStatus: daysOverdue > 0 ? 'ເກີນກຳນົດ' : 'ລໍຖ້າ'
+          });
+
+          // Update corresponding space status
+         const space = spaces.find(s => payment.spaceIds.includes(s.id));
+if (space) {
+  await updateSpace(space.id, {
+    paymentStatus: {
+      currentStatus: 'overdue',
+      currentPeriodPaid: space.paymentStatus?.currentPeriodPaid ?? false, // FIX: Provide explicit boolean
+      nextDueDate: space.paymentStatus?.nextDueDate,
+      lateFee,
+      lateFeeApplied: lateFee > 0,
+      daysOverdue,
+      lastUpdated: new Date()
+    }
+  });
+}
+        }
+      }
+    }
+  } catch (error) {
+    console.error('Error processing late fees:', error);
   }
 };
 
@@ -1280,6 +1370,7 @@ const deleteTenant = async (tenantId: string) => {
         notifications,
         settings,
         loading,
+        
 
         // Space operations
         addSpace,
@@ -1295,6 +1386,9 @@ const deleteTenant = async (tenantId: string) => {
         addPayment,
         updatePayment,
         deletePayment,
+
+        // ADD:
+      processLateFees,
 
         // Bill operations
         addBill,
