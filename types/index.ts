@@ -84,7 +84,7 @@ export interface ContractSpace {
 export interface Payment {
   paymentId: string;
   tenantId: string; // Business ID like "bay001" 
-  spaceIds: string[]; // Firebase document IDs
+  spaceId: string;
   paymentPeriod: string; // YYYY-MM format
   paymentFrequency: 'daily' | 'monthly' | 'yearly';
   dueDate: Date;
