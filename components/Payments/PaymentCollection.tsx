@@ -33,6 +33,10 @@ const PaymentCollection: React.FC = () => {
     loading 
   } = useData();
   const { user } = useAuth();
+
+  // Clean up duplicate data
+   const { cleanupDuplicatePayments } = useData();
+  const [isCleaningUp, setIsCleaningUp] = useState(false);
   
   // New state for enhanced UI
   const [activeTimeTab, setActiveTimeTab] = useState<string>("overdue");
@@ -69,6 +73,19 @@ const PaymentCollection: React.FC = () => {
         </div>
       </div>
     );
+  };
+
+  const handleCleanup = async () => {
+    setIsCleaningUp(true);
+    try {
+      await cleanupDuplicatePayments();
+      alert('Duplicate payments cleaned up successfully!');
+    } catch (error) {
+      console.error('Cleanup failed:', error);
+      alert('Cleanup failed. Check console for details.');
+    } finally {
+      setIsCleaningUp(false);
+    }
   };
 
 const getDaysOverdue = (payment: Payment) => {
@@ -567,6 +584,13 @@ const getStatusText = (payment: Payment) => {
                   <Calendar className="w-3 h-3 mr-1" />
                   ປີ
                 </button>
+                 <button 
+                 className="text-xs border-2 border-red-500"
+      onClick={handleCleanup} 
+      disabled={isCleaningUp}
+    >
+      {isCleaningUp ? 'Cleaning...' : 'Cleanup Duplicate Payments'}
+    </button>
               </div>
             )}
           </div>

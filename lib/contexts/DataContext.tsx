@@ -91,6 +91,9 @@ interface DataContextType {
     dueDate?: Date
   ) => Promise<void>;
 
+  // Delete
+  cleanupDuplicatePayments: () => Promise<void>;
+
   generatePaymentsForAllTenants: (
     paymentFrequency: "daily" | "monthly" | "yearly",
     dueDate?: Date
@@ -170,6 +173,7 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({
   useEffect(() => {
     loadData();
   }, []);
+
 
   // Utility function to convert Firebase Timestamps
   const convertTimestamps = (obj: any) => {
@@ -306,6 +310,9 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({
   };
 
   // Payment generation functions
+// Enhanced Payment Generation Functions - Hybrid Approach
+// Combines frequency-specific periods, smarter duplicate detection, and due date-based logic
+
 const generatePaymentsForTenant = async (
   tenantBusinessId: string, 
   paymentFrequency?: 'daily' | 'monthly' | 'yearly',
@@ -319,9 +326,13 @@ const generatePaymentsForTenant = async (
     const tenantSpaces = spaces.filter(s => tenant.allSpace?.includes(s.id));
     if (tenantSpaces.length === 0) throw new Error(`No spaces found for tenant ${tenantBusinessId}`);
 
-    const currentPeriod = `${dueDate.getFullYear()}-${String(dueDate.getMonth() + 1).padStart(2, '0')}`;
-    let paymentsGenerated = 0;
+    // SOLUTION 1: Frequency-Specific Period Calculation
+    const now = new Date();
+    const currentYear = now.getFullYear().toString();
+    const currentMonth = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
+    const currentDay = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`;
 
+    let paymentsGenerated = 0;
     console.log(`🔄 Generating payments for tenant ${tenantBusinessId} - ${tenantSpaces.length} spaces found`);
 
     // Generate individual payment for each space
@@ -334,67 +345,108 @@ const generatePaymentsForTenant = async (
         continue;
       }
 
-      // Enhanced check: Skip if unpaid payment already exists for this specific space and period
-      const existingUnpaidPayment = payments.find(p => 
-        p.spaceId === space.id && 
-        p.paymentStatus !== 'ຈ່າຍແລ້ວ' &&
-        p.tenantId === tenantBusinessId &&
-        p.paymentPeriod === currentPeriod
-      );
+      // SOLUTION 2: Smarter Duplicate Detection - Frequency-Aware Checking
+      const hasExistingUnpaidPayment = payments.some(p => {
+        if (p.spaceId !== space.id || p.tenantId !== tenantBusinessId || p.paymentStatus === 'ຈ່າຍແລ້ວ') {
+          return false;
+        }
+        
+        // Frequency-specific duplicate detection
+        switch (frequency) {
+          case 'yearly':
+            // Check if any unpaid yearly payment exists for current year
+            return p.paymentPeriod?.startsWith(currentYear) && p.paymentFrequency === 'yearly';
+          case 'monthly':
+            // Check if any unpaid monthly payment exists for current month
+            return p.paymentPeriod === currentMonth && p.paymentFrequency === 'monthly';
+          case 'daily':
+            // Check if any unpaid daily payment exists for current day
+            return p.paymentPeriod === currentDay && p.paymentFrequency === 'daily';
+          default:
+            return false;
+        }
+      });
 
-      if (existingUnpaidPayment) {
-        console.log(`⏭️  Skipping space ${space.spaceCode} - unpaid payment already exists for ${currentPeriod}`);
+      if (hasExistingUnpaidPayment) {
+        console.log(`⏭️  Skipping space ${space.spaceCode} - unpaid ${frequency} payment already exists`);
         continue;
       }
 
-      // Find the last payment for this space to calculate next due date
-      const lastPayment = payments
+      // SOLUTION 3: Due Date-Based Logic - Enhanced Calculation
+      const lastPaidPayment = payments
         .filter(p => 
           p.spaceId === space.id && 
           p.tenantId === tenantBusinessId &&
-          p.paymentStatus === 'ຈ່າຍແລ້ວ'
+          p.paymentStatus === 'ຈ່າຍແລ້ວ' &&
+          p.paymentFrequency === frequency // Only consider payments of same frequency
         )
-        .sort((a, b) => new Date(b.dueDate).getTime() - new Date(a.dueDate).getTime())[0];
+        .sort((a, b) => new Date(b.dueDate || b.paymentDate).getTime() - new Date(a.dueDate || a.paymentDate).getTime())[0];
 
       // Calculate next due date based on frequency and last payment
       let nextDueDate = new Date(dueDate);
+      let calculatedPeriod = '';
       
-      if (lastPayment) {
-        // Calculate from last payment's due date
-        nextDueDate = new Date(lastPayment.dueDate);
+      if (lastPaidPayment) {
+        // Calculate from last paid payment's due date
+        const lastDueDate = new Date(lastPaidPayment.dueDate || lastPaidPayment.paymentDate);
         
-        if (frequency === 'daily') {
-          nextDueDate.setDate(nextDueDate.getDate() + 1);
-        } else if (frequency === 'monthly') {
-          nextDueDate.setMonth(nextDueDate.getMonth() + 1);
-        } else if (frequency === 'yearly') {
-          nextDueDate.setFullYear(nextDueDate.getFullYear() + 1);
+        switch (frequency) {
+          case 'daily':
+            nextDueDate = new Date(lastDueDate);
+            nextDueDate.setDate(nextDueDate.getDate() + 1);
+            calculatedPeriod = `${nextDueDate.getFullYear()}-${String(nextDueDate.getMonth() + 1).padStart(2, '0')}-${String(nextDueDate.getDate()).padStart(2, '0')}`;
+            break;
+          case 'monthly':
+            nextDueDate = new Date(lastDueDate);
+            nextDueDate.setMonth(nextDueDate.getMonth() + 1);
+            calculatedPeriod = `${nextDueDate.getFullYear()}-${String(nextDueDate.getMonth() + 1).padStart(2, '0')}`;
+            break;
+          case 'yearly':
+            nextDueDate = new Date(lastDueDate);
+            nextDueDate.setFullYear(nextDueDate.getFullYear() + 1);
+            calculatedPeriod = nextDueDate.getFullYear().toString();
+            break;
         }
       } else {
-        // First payment - use provided due date or calculate appropriate next date
-        if (frequency === 'daily') {
-          // For daily payments, if it's first payment and we're generating manually, 
-          // set to tomorrow if current time is past business hours
-          const now = new Date();
-          if (now.getHours() >= 17) { // After 5 PM
-            nextDueDate.setDate(nextDueDate.getDate() + 1);
-          }
-        } else if (frequency === 'monthly') {
-          // For monthly payments, set to next month if generating after current month started
-          const today = new Date();
-          if (today.getDate() > 1) {
-            nextDueDate.setMonth(nextDueDate.getMonth() + 1);
-            nextDueDate.setDate(1); // Set to first of next month
-          }
-        } else if (frequency === 'yearly') {
-          // For yearly payments, if we're past January, set to next year
-          const today = new Date();
-          if (today.getMonth() > 0) {
-            nextDueDate.setFullYear(nextDueDate.getFullYear() + 1);
-            nextDueDate.setMonth(0); // January
-            nextDueDate.setDate(1); // First of January
-          }
+        // First payment - use appropriate period format and smart due date calculation
+        const today = new Date();
+        
+        switch (frequency) {
+          case 'daily':
+            // For daily payments, if generating after business hours, set to next day
+            if (today.getHours() >= 17) {
+              nextDueDate.setDate(nextDueDate.getDate() + 1);
+            }
+            calculatedPeriod = `${nextDueDate.getFullYear()}-${String(nextDueDate.getMonth() + 1).padStart(2, '0')}-${String(nextDueDate.getDate()).padStart(2, '0')}`;
+            break;
+          case 'monthly':
+            // For monthly payments, if past mid-month, set to next month
+            if (today.getDate() > 15) {
+              nextDueDate.setMonth(nextDueDate.getMonth() + 1);
+              nextDueDate.setDate(1); // Set to first of next month
+            }
+            calculatedPeriod = `${nextDueDate.getFullYear()}-${String(nextDueDate.getMonth() + 1).padStart(2, '0')}`;
+            break;
+          case 'yearly':
+            // For yearly payments, if past mid-year, set to next year
+            if (today.getMonth() >= 6) {
+              nextDueDate.setFullYear(nextDueDate.getFullYear() + 1);
+              nextDueDate.setMonth(0); // January
+              nextDueDate.setDate(1); // First of January
+            }
+            calculatedPeriod = nextDueDate.getFullYear().toString();
+            break;
         }
+      }
+
+      // Validate that the calculated due date makes sense
+      const todayTime = new Date().getTime();
+      const calculatedTime = nextDueDate.getTime();
+      
+      // Skip if due date is in the past (shouldn't happen with proper logic)
+      if (calculatedTime < todayTime - (24 * 60 * 60 * 1000)) { // Allow 1 day buffer
+        console.log(`⚠️  Skipping space ${space.spaceCode} - calculated due date is too far in the past: ${nextDueDate.toLocaleDateString()}`);
+        continue;
       }
 
       // Calculate amount based on frequency
@@ -418,25 +470,36 @@ const generatePaymentsForTenant = async (
         continue;
       }
 
-      // Update payment period based on calculated due date for proper grouping
-      const calculatedPeriod = `${nextDueDate.getFullYear()}-${String(nextDueDate.getMonth() + 1).padStart(2, '0')}`;
+      // Double-check: ensure no duplicate exists with the calculated period
+      const finalDuplicateCheck = payments.some(p => 
+        p.spaceId === space.id && 
+        p.tenantId === tenantBusinessId &&
+        p.paymentStatus !== 'ຈ່າຍແລ້ວ' &&
+        p.paymentPeriod === calculatedPeriod &&
+        p.paymentFrequency === frequency
+      );
+
+      if (finalDuplicateCheck) {
+        console.log(`⏭️  Final check: Skipping space ${space.spaceCode} - duplicate found for period ${calculatedPeriod}`);
+        continue;
+      }
 
       const paymentData = {
         spaceId: space.id,
         spaceCode: space.spaceCode,
         tenantId: tenantBusinessId,
-        paymentPeriod: calculatedPeriod,
+        paymentPeriod: calculatedPeriod, // Use frequency-specific period format
         dueDate: nextDueDate,
-        originalDueDate: nextDueDate, // For late fee calculation
+        originalDueDate: nextDueDate,
         amountDue,
-        originalAmount: amountDue, // For late fee calculation
+        originalAmount: amountDue,
         lateFee: 0,
         lateFeeRate: null,
         lateFeeApplied: false,
-        daysOverdue: 0, // Initialize days overdue
+        daysOverdue: 0,
         paymentStatus: 'ລໍຖ້າ' as const,
         paymentFrequency: frequency as 'daily' | 'monthly' | 'yearly',
-        notes: `${frequency.charAt(0).toUpperCase() + frequency.slice(1)} payment for space ${space.spaceCode} (${space.spaceType || 'Unknown type'})`,
+        notes: `${frequency.charAt(0).toUpperCase() + frequency.slice(1)} payment for space ${space.spaceCode} (${space.spaceType || 'Unknown type'}) - Period: ${calculatedPeriod}`,
         
         // Legacy fields for compatibility
         id: '',
@@ -449,7 +512,7 @@ const generatePaymentsForTenant = async (
       try {
         await addPayment(paymentData);
         paymentsGenerated++;
-        console.log(`✅ Generated ${frequency} payment for space ${space.spaceCode}: ฿${amountDue.toLocaleString()} - Due: ${nextDueDate.toLocaleDateString()}`);
+        console.log(`✅ Generated ${frequency} payment for space ${space.spaceCode}: ₭${amountDue.toLocaleString()} - Due: ${nextDueDate.toLocaleDateString()} - Period: ${calculatedPeriod}`);
         
         // Update space payment status
         await updateSpace(space.id, {
@@ -466,22 +529,63 @@ const generatePaymentsForTenant = async (
         
       } catch (paymentError) {
         console.error(`❌ Failed to generate payment for space ${space.spaceCode}:`, paymentError);
-        // Continue with other spaces instead of failing completely
+        continue;
       }
     }
 
     if (paymentsGenerated > 0) {
       console.log(`🎉 Successfully generated ${paymentsGenerated} payments for tenant ${tenantBusinessId}`);
     } else {
-      console.log(`ℹ️  No new payments generated for tenant ${tenantBusinessId} - all spaces already have payments for ${currentPeriod}`);
+      console.log(`ℹ️  No new payments generated for tenant ${tenantBusinessId} - all applicable periods already covered`);
     }
-
-    // Don't return the count to match interface expectation
 
   } catch (error) {
     console.error(`❌ Error generating payments for tenant ${tenantBusinessId}:`, error);
     throw error;
   }
+};
+
+// Enhanced utility function to clean up duplicate payments (run once to fix existing data)
+const cleanupDuplicatePayments = async () => {
+  console.log('Starting duplicate payment cleanup...');
+  
+  // Group payments by tenant, space, frequency, and period
+  const paymentGroups = new Map<string, Payment[]>();
+  
+  payments.forEach(payment => {
+    const key = `${payment.tenantId}-${payment.spaceId}-${payment.paymentFrequency}-${payment.paymentPeriod}`;
+    
+    if (!paymentGroups.has(key)) {
+      paymentGroups.set(key, []);
+    }
+    paymentGroups.get(key)!.push(payment);
+  });
+  
+  // Find and remove duplicates (keep the oldest one)
+  let duplicatesRemoved = 0;
+  
+  // Use Array.from to iterate over Map entries for TypeScript compatibility
+  for (const [key, groupPayments] of Array.from(paymentGroups.entries())) {
+    if (groupPayments.length > 1) {
+      // Sort by creation date, keep the first one
+      groupPayments.sort((a: Payment, b: Payment) => 
+        new Date(a.createdAt || 0).getTime() - new Date(b.createdAt || 0).getTime()
+      );
+      
+      // Remove duplicates (skip the first one)
+      for (let i = 1; i < groupPayments.length; i++) {
+        try {
+          await deletePayment(groupPayments[i].paymentId || groupPayments[i].id);
+          duplicatesRemoved++;
+          console.log(`Removed duplicate payment: ${key}`);
+        } catch (error) {
+          console.error(`Failed to remove duplicate payment:`, error);
+        }
+      }
+    }
+  }
+  
+  console.log(`Cleanup complete: Removed ${duplicatesRemoved} duplicate payments`);
 };
 
 // NEW: Daily late fee processing function
@@ -1491,11 +1595,14 @@ const deleteTenant = async (tenantId: string) => {
         // Payment generation functions
         generatePaymentsForTenant,
         generatePaymentsForAllTenants,
+        cleanupDuplicatePayments,
 
         // Utility functions
         getDashboardStats,
         generateReceiptNumber,
         updateSettings,
+
+       
       }}
     >
       {children}
