@@ -84,8 +84,7 @@ export interface ContractSpace {
 export interface Payment {
   paymentId: string;
   tenantId: string; // Business ID like "bay001" 
-  spaceId: string; // ADD: single space ID
-  spaceCode: string; // ADD: space code
+  spaceId: string;
   paymentPeriod: string; // YYYY-MM format
   paymentFrequency: 'daily' | 'monthly' | 'yearly';
   dueDate: Date;

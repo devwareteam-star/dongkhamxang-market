@@ -104,13 +104,12 @@ const TenantModal: React.FC<TenantModalProps> = ({
         : [...(prev.allSpace || []), spaceId],
     }));
   };
-
-  const calculateTotalRent = () => {
-    return (formData.allSpace || []).reduce((total, spaceId) => {
-      const space = spaces.find((s) => s.id === spaceId); // Change from s.spaceId to s.id
-      return total + (space ? space.baseRentMonthly : 0);
-    }, 0);
-  };
+const calculateTotalRent = () => {
+  return (formData.allSpace || []).reduce((total, spaceId) => {
+    const space = spaces.find((s) => s.id === spaceId);
+    return total + (space?.originalRentAmount || 0);
+  }, 0);
+};
 
   const getFilteredSpaces = () => {
   const availableSpaces = spaces.filter((space) => {
@@ -238,8 +237,7 @@ const validateSpaceSelection = (): string[] => {
             )}
           </div>
           <div className="text-xs text-gray-500">
-            {space.spaceType} • Zone {space.zone} • ₭
-            {space.baseRentMonthly.toLocaleString()}/ເດືອນ
+{space.spaceType} • Zone {space.zone} • ₭{space.originalRentAmount?.toLocaleString()}/{space.paymentFrequency === 'yearly' ? 'ປີ' : space.paymentFrequency === 'monthly' ? 'ເດືອນ' : space.paymentFrequency}
           </div>
         </div>
       </label>
@@ -425,7 +423,8 @@ const validateSpaceSelection = (): string[] => {
                       {space.spaceCode} <span className="text-xs text-blue-600">(ປັດຈຸບັນ)</span>
                     </div>
                     <div className="text-xs text-blue-700">
-                      {space.spaceType} • Zone {space.zone} • ₭{space.baseRentMonthly.toLocaleString()}/ເດືອນ
+{space.spaceType} • Zone {space.zone} • ₭{space.originalRentAmount?.toLocaleString()}/{space.paymentFrequency === 'yearly' ? 'ປີ' : space.paymentFrequency === 'monthly' ? 'ເດືອນ' : space.paymentFrequency === 'daily' ? 'ມື້' : space.paymentFrequency}
+                      
                     </div>
                   </div>
                 </label>
@@ -495,7 +494,7 @@ const validateSpaceSelection = (): string[] => {
                       {space.spaceCode} <span className="text-xs text-green-600">(ວ່າງ)</span>
                     </div>
                     <div className="text-xs text-green-700">
-                      {space.spaceType} • Zone {space.zone} • ₭{space.baseRentMonthly.toLocaleString()}/ເດືອນ
+                      {space.spaceType} • Zone {space.zone} • ₭{space.originalRentAmount?.toLocaleString()}/{space.paymentFrequency === 'yearly' ? 'ປີ' : space.paymentFrequency === 'monthly' ? 'ເດືອນ' : space.paymentFrequency === 'daily' ? 'ມື້' : space.paymentFrequency}
                     </div>
                   </div>
                 </label>
