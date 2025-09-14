@@ -17,6 +17,7 @@ import RoomSearch from '@/components/Search/RoomSearch';
 import TenantManagement from '@/components/Tenants/TenantManagement';
 // import NotificationCenter from '@/components/Notifications/NotificationCenter';
 import EmployeeSchedule from '@/components/Schedule/EmployeeSchedule';
+import SpaceLayoutDashboard from '@/components/SpaceDragDrop/SpaceDragDrop';
 
 export default function Home() {
   const { user, isLoading } = useAuth();
@@ -66,6 +67,10 @@ export default function Home() {
     switch (activeView) {
       case 'dashboard':
         return isAdminOrManager() ? <AdminDashboard /> : <EmployeeDashboard />;
+
+        case 'layout':
+case 'space-layout':
+  return hasPermission('spaces', 'read') ? <SpaceLayoutDashboard /> : <AccessDenied />;
       
       case 'spaces':
       case 'rooms':
