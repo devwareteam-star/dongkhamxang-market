@@ -92,7 +92,7 @@ const PaymentCollection: React.FC = () => {
     if (spaceTypeFilter !== "all") {
       filtered = filtered.filter((payment) => {
         const space = spaces.find(s => 
-          payment.spaceIds?.includes(s.id) || s.id === payment.roomId
+          s.id === payment.spaceId || s.id === payment.roomId
         );
         return space?.spaceType === spaceTypeFilter;
       });
@@ -102,7 +102,7 @@ const PaymentCollection: React.FC = () => {
     if (searchTerm) {
       filtered = filtered.filter((payment) => {
         const space = spaces.find(s => 
-          payment.spaceIds?.includes(s.id) || s.id === payment.roomId
+          s.id === payment.spaceId || s.id === payment.roomId
         );
         const tenant = tenants.find(t => t.tenantId === payment.tenantId);
 
@@ -429,7 +429,7 @@ const PaymentCollection: React.FC = () => {
             <tbody className="divide-y divide-gray-100">
               {filteredPayments.map((payment) => {
                 const space = spaces.find(s => 
-                  payment.spaceIds?.includes(s.id) || s.id === payment.roomId
+                  s.id === payment.spaceId || s.id === payment.roomId
                 );
                 const tenant = tenants.find(t => t.tenantId === payment.tenantId);
                 const daysOverdue = getDaysOverdue(payment);

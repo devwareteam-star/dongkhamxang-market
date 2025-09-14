@@ -244,7 +244,7 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({
       amount: payment.amountDue || 0,
       status: mapPaymentStatusToEnglish(payment.paymentStatus || "ລໍຖ້າ"),
       paidDate: payment.paymentDate,
-      paymentType: inferPaymentType(payment, tenantsList, spacesList),
+      paymentType: payment.paymentFrequency || inferPaymentType(payment, tenantsList, spacesList),
     };
   };
 
@@ -318,47 +318,73 @@ const generatePaymentsForTenant = async (
     const tenantSpaces = spaces.filter(s => tenant.allSpace?.includes(s.id));
     if (tenantSpaces.length === 0) throw new Error(`No spaces found for tenant ${tenantBusinessId}`);
 
-    // CHANGE: Generate individual payment for each space
+    const currentPeriod = `${dueDate.getFullYear()}-${String(dueDate.getMonth() + 1).padStart(2, '0')}`;
+    let paymentsGenerated = 0;
+
+    console.log(`🔄 Generating payments for tenant ${tenantBusinessId} - ${tenantSpaces.length} spaces found`);
+
+    // Generate individual payment for each space
     for (const space of tenantSpaces) {
       const frequency = space.paymentFrequency || 'monthly';
       
       // Skip if specific frequency requested and doesn't match
-      if (paymentFrequency && frequency !== paymentFrequency) continue;
+      if (paymentFrequency && frequency !== paymentFrequency) {
+        console.log(`⏭️  Skipping space ${space.spaceCode} - frequency mismatch (${frequency} vs ${paymentFrequency})`);
+        continue;
+      }
 
-      // CHECK: Skip if unpaid payment already exists for this space
+      // Enhanced check: Skip if unpaid payment already exists for this specific space and period
       const existingUnpaidPayment = payments.find(p => 
-        p.spaceIds.includes(space.id) && 
+        p.spaceId === space.id && 
         p.paymentStatus !== 'ຈ່າຍແລ້ວ' &&
-        p.tenantId === tenantBusinessId
+        p.tenantId === tenantBusinessId &&
+        p.paymentPeriod === currentPeriod
       );
 
       if (existingUnpaidPayment) {
-        console.log(`Skipping space ${space.spaceCode} - unpaid payment exists`);
+        console.log(`⏭️  Skipping space ${space.spaceCode} - unpaid payment already exists for ${currentPeriod}`);
         continue;
       }
 
       // Calculate amount based on frequency
-      let amountDue = space.baseRentMonthly;
-      if (frequency === 'yearly') amountDue = space.baseRentMonthly * 12;
-      else if (frequency === 'daily') amountDue = Math.round(space.baseRentMonthly / 30);
+      let amountDue = 0;
+      switch (frequency) {
+        case 'yearly':
+          amountDue = space.baseRentMonthly * 12;
+          break;
+        case 'daily':
+          amountDue = Math.round(space.baseRentMonthly / 30);
+          break;
+        case 'monthly':
+        default:
+          amountDue = space.baseRentMonthly;
+          break;
+      }
+
+      // Validate amount
+      if (amountDue <= 0) {
+        console.warn(`⚠️  Skipping space ${space.spaceCode} - invalid amount: ${amountDue}`);
+        continue;
+      }
 
       const paymentData = {
-        contractId: '',
-        spaceIds: [space.id], // CHANGE: Single space per payment
+        spaceId: space.id,
+        spaceCode: space.spaceCode,
         tenantId: tenantBusinessId,
-        paymentPeriod: `${dueDate.getFullYear()}-${String(dueDate.getMonth() + 1).padStart(2, '0')}`,
-        dueDate,
-        originalDueDate: dueDate, // ADD: Original due date for late fee calculation
+        paymentPeriod: currentPeriod,
+        dueDate: new Date(dueDate),
+        originalDueDate: new Date(dueDate), // For late fee calculation
         amountDue,
-        originalAmount: amountDue, // ADD: Original amount (never changes)
-        lateFee: 0, // ADD: Initial late fee
-        lateFeeRate: null, // ADD: Initial rate
-        lateFeeApplied: false, // ADD: Initial flag
+        originalAmount: amountDue, // For late fee calculation
+        lateFee: 0,
+        lateFeeRate: null,
+        lateFeeApplied: false,
+        daysOverdue: 0, // Initialize days overdue
         paymentStatus: 'ລໍຖ້າ' as const,
         paymentFrequency: frequency as 'daily' | 'monthly' | 'yearly',
-        notes: `${frequency} payment for ${space.spaceCode}`,
+        notes: `${frequency.charAt(0).toUpperCase() + frequency.slice(1)} payment for space ${space.spaceCode} (${space.spaceType || 'Unknown type'})`,
         
-        // Legacy fields
+        // Legacy fields for compatibility
         id: '',
         roomId: space.id,
         amount: amountDue,
@@ -366,25 +392,40 @@ const generatePaymentsForTenant = async (
         paymentType: frequency as 'daily' | 'monthly' | 'yearly',
       };
 
-      await addPayment(paymentData);
-
-      // UPDATE: Initialize space payment status
-      const spaceUpdate = {
-        paymentStatus: {
-          currentStatus: 'pending' as const,
-          currentPeriodPaid: false,
-          nextDueDate: dueDate,
-          lateFee: 0,
-          lateFeeApplied: false,
-          daysOverdue: 0,
-          lastUpdated: new Date()
-        }
-      };
-      
-      await updateSpace(space.id, spaceUpdate);
+      try {
+        await addPayment(paymentData);
+        paymentsGenerated++;
+        console.log(`✅ Generated ${frequency} payment for space ${space.spaceCode}: ฿${amountDue.toLocaleString()}`);
+        
+        // Update space payment status
+        await updateSpace(space.id, {
+          paymentStatus: {
+            currentStatus: 'pending',
+            currentPeriodPaid: false,
+            nextDueDate: new Date(dueDate),
+            lateFee: 0,
+            lateFeeApplied: false,
+            daysOverdue: 0,
+            lastUpdated: new Date()
+          }
+        });
+        
+      } catch (paymentError) {
+        console.error(`❌ Failed to generate payment for space ${space.spaceCode}:`, paymentError);
+        // Continue with other spaces instead of failing completely
+      }
     }
+
+    if (paymentsGenerated > 0) {
+      console.log(`🎉 Successfully generated ${paymentsGenerated} payments for tenant ${tenantBusinessId}`);
+    } else {
+      console.log(`ℹ️  No new payments generated for tenant ${tenantBusinessId} - all spaces already have payments for ${currentPeriod}`);
+    }
+
+    // Don't return the count to match interface expectation
+
   } catch (error) {
-    console.error('Error generating payment for tenant:', error);
+    console.error(`❌ Error generating payments for tenant ${tenantBusinessId}:`, error);
     throw error;
   }
 };
@@ -419,21 +460,21 @@ const processLateFees = async () => {
             paymentStatus: daysOverdue > 0 ? 'ເກີນກຳນົດ' : 'ລໍຖ້າ'
           });
 
-          // Update corresponding space status
-         const space = spaces.find(s => payment.spaceIds.includes(s.id));
-if (space) {
-  await updateSpace(space.id, {
-    paymentStatus: {
-      currentStatus: 'overdue',
-      currentPeriodPaid: space.paymentStatus?.currentPeriodPaid ?? false, // FIX: Provide explicit boolean
-      nextDueDate: space.paymentStatus?.nextDueDate,
-      lateFee,
-      lateFeeApplied: lateFee > 0,
-      daysOverdue,
-      lastUpdated: new Date()
-    }
-  });
-}
+          // Update corresponding space status - FIXED: use spaceId instead of spaceIds
+          const space = spaces.find(s => s.id === payment.spaceId);
+          if (space) {
+           await updateSpace(space.id, {
+              paymentStatus: {
+                currentStatus: 'overdue',
+                currentPeriodPaid: space.paymentStatus?.currentPeriodPaid ?? false, // Explicit boolean
+                nextDueDate: space.paymentStatus?.nextDueDate,
+                lateFee,
+                lateFeeApplied: lateFee > 0,
+                daysOverdue,
+                lastUpdated: new Date()
+              }
+            });
+          }
         }
       }
     }
@@ -442,44 +483,32 @@ if (space) {
   }
 };
 
-  const generatePaymentsForAllTenants = async (
-    paymentFrequency: "daily" | "monthly" | "yearly",
-    dueDate: Date = new Date()
-  ) => {
-    try {
-      const activeTenants = tenants.filter(
-        (t) => t.allSpace && t.allSpace.length > 0
+ const generatePaymentsForAllTenants = async (
+  paymentFrequency: "daily" | "monthly" | "yearly",
+  dueDate: Date = new Date()
+) => {
+  try {
+    const activeTenants = tenants.filter(
+      (t) => t.allSpace && t.allSpace.length > 0
+    );
+
+    for (const tenant of activeTenants) {
+      // Remove the old duplicate check - let generatePaymentsForTenant handle it
+      await generatePaymentsForTenant(
+        tenant.tenantId,
+        paymentFrequency, // Pass the specific frequency
+        dueDate
       );
-
-      for (const tenant of activeTenants) {
-        // Check if payment already exists for this period
-        const paymentPeriod = `${dueDate.getFullYear()}-${String(
-          dueDate.getMonth() + 1
-        ).padStart(2, "0")}`;
-        const existingPayment = payments.find(
-          (p) =>
-            p.tenantId === tenant.tenantId &&
-            p.paymentPeriod === paymentPeriod &&
-            inferPaymentType(p, tenants, spaces) === paymentFrequency
-        );
-
-        if (!existingPayment) {
-          await generatePaymentsForTenant(
-            tenant.tenantId,
-            paymentFrequency,
-            dueDate
-          );
-        }
-      }
-
-      console.log(
-        `Generated ${paymentFrequency} payments for all active tenants`
-      );
-    } catch (error) {
-      console.error("Error generating bulk payments:", error);
-      throw error;
     }
-  };
+
+    console.log(
+      `Generated ${paymentFrequency} payments for all active tenants`
+    );
+  } catch (error) {
+    console.error("Error generating bulk payments:", error);
+    throw error;
+  }
+};
 
   // Space operations
   const addSpace = async (
