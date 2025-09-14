@@ -113,6 +113,7 @@ const unreadNotifications = notifications.filter(n =>
         </ul>
       </nav>
       
+      
       {/* Footer */}
       <div className="p-4 border-t border-gray-200 bg-gray-50">
         <div className="mb-3 text-xs text-gray-500 text-center">
