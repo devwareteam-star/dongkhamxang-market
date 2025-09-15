@@ -123,10 +123,11 @@ export interface Payment {
   paymentType: 'daily' | 'monthly' | 'yearly'; // Alias for paymentFrequency
 }
 
+
+
 export interface Bill {
   billId: string;
   paymentId: string;
-  contractId: string;
   tenantId: string;
   billNumber: string;
   billDate: Date;

@@ -35,6 +35,7 @@ const unreadNotifications = notifications.filter(n =>
 
   const adminMenuItems = [
     { id: 'dashboard', label: 'ແດັຊບອດ', icon: Home },
+    { id: 'space-layout', label: 'ຈັດການຜັງຕະຫຼາດ', icon: FileText },
     { id: 'spaces', label: 'ຈັດການຫ້ອງເຊົ່າ', icon: Building2 },
     { id: 'tenants', label: 'ຈັດການຜູ້ເຊົ່າ', icon: UserCheck },
     { id: 'payments', label: 'ການຊຳລະເງິນ', icon: CreditCard },
@@ -112,6 +113,7 @@ const unreadNotifications = notifications.filter(n =>
           })}
         </ul>
       </nav>
+
       
       {/* Footer */}
       <div className="p-4 border-t border-gray-200 bg-gray-50">
