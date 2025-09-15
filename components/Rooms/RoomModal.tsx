@@ -37,13 +37,13 @@ const { spaces } = useData();
     spaceType: Space["spaceType"]
   ): PaymentFrequency[] => {
     switch (spaceType) {
-      case "ໂຕະ": // Table
+      case "table": // Table
         return ["daily", "monthly", "yearly"];
-      case "ຫ້ອງເຊົ່າ": // Room
+      case "room": // Room
         return ["monthly", "yearly"];
-      case "ບູດ": // Booth
+      case "booth": // Booth
         return ["daily"];
-      case "ປ້າຍ": // Signage
+      case "signage": // Signage
         return ["yearly"];
       default:
         return ["monthly"];
@@ -66,7 +66,7 @@ const { spaces } = useData();
 const getAvailableSpaceCodesForCurrentSelection = (): string[] => {
   // Get all possible codes for this space type/zone
   let allPossibleCodes: string[];
-  if (formData.spaceType === 'ຫ້ອງເຊົ່າ' && formData.zone) {
+  if (formData.spaceType === 'room' && formData.zone) {
     allPossibleCodes = getRoomCodesByZone(formData.zone);
   } else {
     allPossibleCodes = getSpaceCodesByType(formData.spaceType);
@@ -89,9 +89,9 @@ const getAvailableSpaceCodesForCurrentSelection = (): string[] => {
 
 const getSpaceCodePlaceholder = (): string => {
   switch (formData.spaceType) {
-    case 'ໂຕະ':
+    case 'table':
       return 'T001, T002, ... T130';
-    case 'ຫ້ອງເຊົ່າ':
+    case 'room':
       if (formData.zone) {
         const zoneInfo = {
           'G': 'RG001-RG145',
@@ -103,9 +103,9 @@ const getSpaceCodePlaceholder = (): string => {
         return zoneInfo[formData.zone];
       }
       return 'ເລືອກໂຊນກ່ອນ';
-    case 'ບູດ':
+    case 'booth':
       return 'B001, B002, B003';
-    case 'ປ້າຍ':
+    case 'signage':
       return 'S001, S002, ... S010';
     default:
       return 'ເລືອກປະເພດກ່ອນ';
@@ -122,7 +122,7 @@ const handleSpaceCodeChange = (value: string) => {
 };
 
 const handleAutoSuggestSpaceCode = () => {
-  const zone = formData.spaceType === 'ຫ້ອງເຊົ່າ' ? formData.zone : undefined;
+  const zone = formData.spaceType === 'room' ? formData.zone : undefined;
   const suggestedCode = getNextAvailableSpaceCode(formData.spaceType, zone);
   
   if (suggestedCode) {
@@ -189,9 +189,9 @@ const handleAutoSuggestSpaceCode = () => {
     } else {
       setFormData({
         spaceCode: "",
-        spaceType: "ໂຕະ",
+        spaceType: "table",
         zone: "G",
-        status: "ວ່າງ",
+        status: "vacant",
         paymentFrequency: "daily", // Default for table
         baseRentAmount: "", // Use baseRentAmount instead of baseRentMonthly
         productCategory: "",
@@ -212,7 +212,7 @@ const handleAutoSuggestSpaceCode = () => {
   if (!formData.spaceCode.trim()) {
     newErrors.spaceCode = 'ກະລຸນາໃສ່ລະຫັດພື້ນທີ່';
   } else {
-    const zone = formData.spaceType === 'ຫ້ອງເຊົ່າ' ? formData.zone : undefined;
+    const zone = formData.spaceType === 'room' ? formData.zone : undefined;
     const validation = validateSpaceCode(formData.spaceCode, formData.spaceType, zone);
     
     if (!validation.isValid) {
@@ -221,7 +221,7 @@ const handleAutoSuggestSpaceCode = () => {
   }
 
   // Zone validation (only for rooms)
-  if (formData.spaceType === 'ຫ້ອງເຊົ່າ' && !formData.zone) {
+  if (formData.spaceType === 'room' && !formData.zone) {
     newErrors.zone = 'ກະລຸນາເລືອກໂຊນ';
   }
 
@@ -263,7 +263,7 @@ const handleAutoSuggestSpaceCode = () => {
       const spaceData = {
         spaceCode: formData.spaceCode.trim(),
     spaceType: formData.spaceType,
-    zone: formData.spaceType === 'ຫ້ອງເຊົ່າ' ? formData.zone : undefined,
+    zone: formData.spaceType === 'room' ? formData.zone : undefined,
     status: formData.status,
     baseRentMonthly: monthlyRate,
     paymentFrequency: formData.paymentFrequency,
@@ -324,7 +324,7 @@ const handleAutoSuggestSpaceCode = () => {
     setFormData((prev) => ({
       ...prev,
       spaceType: value,
-      zone: value === "ຫ້ອງເຊົ່າ" ? prev.zone : undefined,
+      zone: value === "room" ? prev.zone : undefined,
       paymentFrequency: defaultPaymentFrequency, // Auto-set payment frequency
       baseRentAmount: "", // Clear amount when changing space type
     }));
@@ -371,10 +371,10 @@ const handleAutoSuggestSpaceCode = () => {
                 }
                 className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
               >
-                <option value="ໂຕະ">ໂຕະ (Table)</option>
-                <option value="ຫ້ອງເຊົ່າ">ຫ້ອງເຊົ່າ (Room)</option>
-                <option value="ປ້າຍ">ປ້າຍ (Signage)</option>
-                <option value="ບູດ">ບູດ (Booth)</option>
+                <option value="table">ໂຕະ (Table)</option>
+                <option value="room">ຫ້ອງເຊົ່າ (Room)</option>
+                <option value="signage">ປ້າຍ (Signage)</option>
+                <option value="booth">ບູດ (Booth)</option>
               </select>
             </div>
             {/* Space Code */}
@@ -421,7 +421,7 @@ const handleAutoSuggestSpaceCode = () => {
             </div>
 
             {/* Zone */}
-            {formData.spaceType === "ຫ້ອງເຊົ່າ" && (
+            {formData.spaceType === "room" && (
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-2">
                   ໂຊນ <span className="text-red-500">*</span>

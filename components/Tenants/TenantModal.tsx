@@ -114,7 +114,7 @@ const calculateTotalRent = () => {
   const getFilteredSpaces = () => {
   const availableSpaces = spaces.filter((space) => {
     // Show vacant spaces
-    if (space.status === "ວ່າງ") return true;
+    if (space.status === "vacant") return true;
 
     // Show spaces currently assigned to this tenant (when editing)
     if (editingTenant && (formData.allSpace || []).includes(space.id))
@@ -155,7 +155,7 @@ const validateSpaceSelection = (): string[] => {
 
     // Check if space is occupied by another tenant (only for new assignments)
     if (
-      space.status === "ເຊົ່າແລ້ວ" &&
+      space.status === "rented" &&
       space.currentTenantId &&
       space.currentTenantId !== editingTenant?.tenantId
     ) {
@@ -163,7 +163,7 @@ const validateSpaceSelection = (): string[] => {
     }
 
     // Check if space is under maintenance
-    if (space.status === "ຊ່ອມແຊມ") {
+    if (space.status === "maintainance") {
       unavailableSpaces.push(space.spaceCode);
     }
   });
@@ -195,11 +195,11 @@ const validateSpaceSelection = (): string[] => {
   };
 
   const renderSpaceCheckbox = (space: Space) => {
-    const isUnavailable = space.status === 'ເຊົ່າແລ້ວ' && 
+    const isUnavailable = space.status === 'rented' && 
                        space.currentTenantId && 
                        space.currentTenantId !== editingTenant?.tenantId;
   
-  const isInMaintenance = space.status === 'ຊ່ອມແຊມ';
+  const isInMaintenance = space.status === 'maintainance';
  return (
     <label 
       key={space.id} // Change from space.spaceId to space.id
@@ -449,10 +449,10 @@ const validateSpaceSelection = (): string[] => {
           <div className="flex flex-wrap gap-2">
             {[
               { key: "all", label: "ທັງໝົດ" },
-              { key: "ໂຕະ", label: "ໂຕະ" },
-              { key: "ຫ້ອງເຊົ່າ", label: "ຫ້ອງເຊົ່າ" },
-              { key: "ບູດ", label: "ບູດ" },
-              { key: "ປ້າຍ", label: "ປ້າຍ" },
+              { key: "table", label: "ໂຕະ" },
+              { key: "room", label: "ຫ້ອງເຊົ່າ" },
+              { key: "booth", label: "ບູດ" },
+              { key: "signage", label: "ປ້າຍ" },
             ].map((tab) => (
               <button
                 key={tab.key}
@@ -475,7 +475,7 @@ const validateSpaceSelection = (): string[] => {
             {spaces
               .filter((space) => {
                 // Only show truly vacant spaces
-                const isVacant = space.status === "ວ່າງ";
+                const isVacant = space.status === "vacant";
                 const matchesFilter = spaceTypeFilter === "all" || space.spaceType === spaceTypeFilter;
                 const notCurrentlySelected = !(formData.allSpace || []).includes(space.id);
                 
@@ -503,7 +503,7 @@ const validateSpaceSelection = (): string[] => {
           </div>
           
           {spaces.filter((space) => {
-            const isVacant = space.status === "ວ່າງ";
+            const isVacant = space.status === "vacant";
             const matchesFilter = spaceTypeFilter === "all" || space.spaceType === spaceTypeFilter;
             const notCurrentlySelected = !(formData.allSpace || []).includes(space.id);
             return isVacant && matchesFilter && notCurrentlySelected;
@@ -523,27 +523,27 @@ const validateSpaceSelection = (): string[] => {
             {
               key: "all",
               label: "ທັງໝົດ",
-              count: spaces.filter((s) => s.status === "ວ່າງ").length,
+              count: spaces.filter((s) => s.status === "vacant").length,
             },
             {
-              key: "ໂຕະ",
+              key: "table",
               label: "ໂຕະ",
-              count: spaces.filter((s) => s.status === "ວ່າງ" && s.spaceType === "ໂຕະ").length,
+              count: spaces.filter((s) => s.status === "vacant" && s.spaceType === "table").length,
             },
             {
-              key: "ຫ້ອງເຊົ່າ",
+              key: "room",
               label: "ຫ້ອງເຊົ່າ",
-              count: spaces.filter((s) => s.status === "ວ່າງ" && s.spaceType === "ຫ້ອງເຊົ່າ").length,
+              count: spaces.filter((s) => s.status === "vacant" && s.spaceType === "room").length,
             },
             {
-              key: "ບູດ",
+              key: "booth",
               label: "ບູດ",
-              count: spaces.filter((s) => s.status === "ວ່າງ" && s.spaceType === "ບູດ").length,
+              count: spaces.filter((s) => s.status === "vacant" && s.spaceType === "booth").length,
             },
             {
-              key: "ປ້າຍ",
+              key: "signage",
               label: "ປ້າຍ",
-              count: spaces.filter((s) => s.status === "ວ່າງ" && s.spaceType === "ປ້າຍ").length,
+              count: spaces.filter((s) => s.status === "vacant" && s.spaceType === "signage").length,
             },
           ].map((tab) => (
             <button

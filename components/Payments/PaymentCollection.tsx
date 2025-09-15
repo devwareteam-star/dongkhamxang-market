@@ -246,15 +246,15 @@ if (payment.status !== 'paid' && dueDate < todayStart) {
   };
 
   const handlePaymentCollectedFromModal = async (data: { 
-    paymentMethod: 'ເງິນສົດ' | 'ໂອນເງິນ' | 'BCEL' | 'JDB'; 
-    notes?: string | null | undefined 
+  paymentMethod: 'cash' | 'transfer' | undefined; 
+  notes?: string | undefined 
   }) => {
     if (!selectedPayment) return;
 
     try {
       const receiptNumber = generateReceiptNumber();
       await updatePayment(selectedPayment.id, {
-        paymentStatus: 'ຈ່າຍແລ້ວ',
+        paymentStatus: 'paid',
         paymentDate: new Date(),
         paymentMethod: data.paymentMethod,
         receiptNumber,
@@ -591,6 +591,7 @@ const getStatusText = (payment: Payment) => {
     >
       {isCleaningUp ? 'Cleaning...' : 'Cleanup Duplicate Payments'}
     </button>
+  
               </div>
             )}
           </div>

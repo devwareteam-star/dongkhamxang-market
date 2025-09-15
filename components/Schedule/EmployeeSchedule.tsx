@@ -22,7 +22,7 @@ const EmployeeSchedule: React.FC = () => {
   const tasksForDate = payments.filter(payment => {
     const dueDate = new Date(payment.dueDate);
     return dueDate.toDateString() === selectedDateObj.toDateString() && 
-    payment.paymentStatus === 'ລໍຖ້າ' || payment.paymentStatus === 'ເກີນກຳນົດ'
+    payment.paymentStatus === 'pending' || payment.paymentStatus === 'overdue'
   });
 
   // Get completed tasks for today
@@ -136,7 +136,7 @@ const EmployeeSchedule: React.FC = () => {
 
         <div className="divide-y divide-gray-100">
           {tasksForDate.map((payment) => {
-            const room = spaces.find(r => r.spaceId === (payment.spaceIds?.[0] || payment.roomId));
+            const room = spaces.find(r => r.id === (payment.spaceId || payment.roomId));
             const tenant = tenants.find(t => t.id === payment.tenantId);
             const priority = getTaskPriority(payment);
 
@@ -198,7 +198,7 @@ const EmployeeSchedule: React.FC = () => {
           </div>
           <div className="divide-y divide-gray-100">
             {completedToday.slice(0, 5).map((payment) => {
-              const room = spaces.find(r => r.spaceId === (payment.spaceIds?.[0] || payment.roomId));
+              const room = spaces.find(r => r.id === (payment.spaceId || payment.roomId));
               const tenant = tenants.find(t => t.id === payment.tenantId);
 
               return (

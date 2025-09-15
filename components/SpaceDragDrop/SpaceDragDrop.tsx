@@ -7,8 +7,10 @@ import { CSS } from '@dnd-kit/utilities';
 import { Building2, Home, Clipboard, Package, CheckCircle, Clock, AlertTriangle, AlertCircle, LucideIcon, Edit3 } from 'lucide-react';
 import SpaceDragDropModal from './SpaceDragDropModal';
 
-// Constants
-const SPACE_SIZE = 48;
+// Constants - Adjust these to change all space sizes globally
+const SPACE_WIDTH = 60; // All spaces will be this width
+const SPACE_HEIGHT = 60; // All spaces will be this height
+const GRID_SIZE = Math.min(SPACE_WIDTH, SPACE_HEIGHT); // Grid size based on smallest dimension
 const SPACE_MARGIN = 4;
 
 // Interface definitions
@@ -48,10 +50,10 @@ interface SidebarDropZoneProps {
 }
 
 const spaceTypes: SpaceTypeConfig[] = [
-  { key: 'ໂຕະ', label: 'ໂຕະ (Tables)', icon: Package },
-  { key: 'ຫ້ອງເຊົ່າ', label: 'ຫ້ອງເຊົ່າ (Rooms)', icon: Home },
-  { key: 'ປ້າຍ', label: 'ປ້າຍ (Signage)', icon: Clipboard },
-  { key: 'ບູດ', label: 'ບູດ (Booths)', icon: Building2 }
+  { key: 'table', label: 'ໂຕະ (Tables)', icon: Package },
+  { key: 'room', label: 'ຫ້ອງເຊົ່າ (Rooms)', icon: Home },
+  { key: 'signage', label: 'ປ້າຍ (Signage)', icon: Clipboard },
+  { key: 'booth', label: 'ບູດ (Booths)', icon: Building2 }
 ];
 
 // Helper functions
@@ -61,8 +63,8 @@ const snapToGrid = (value: number, gridSize: number): number => {
 
 const getInitialPosition = (): { x: number; y: number; floor: number } => {
   return {
-    x: SPACE_SIZE * 1,
-    y: SPACE_SIZE * 1,
+    x: GRID_SIZE * 2,
+    y: GRID_SIZE * 2,
     floor: 1
   };
 };
@@ -93,7 +95,7 @@ const useResponsiveCanvas = () => {
 };
 
 const SpaceLayoutDashboard: React.FC = () => {
-  const [activeTab, setActiveTab] = useState<Space['spaceType']>('ໂຕະ');
+  const [activeTab, setActiveTab] = useState<Space['spaceType']>('table');
   const [draggedSpace, setDraggedSpace] = useState<Space | null>(null);
   const [selectedSpace, setSelectedSpace] = useState<Space | null>(null);
   const [isModalOpen, setIsModalOpen] = useState(false);
@@ -178,12 +180,12 @@ const SpaceLayoutDashboard: React.FC = () => {
         
         newPosition = {
           x: Math.max(SPACE_MARGIN, Math.min(
-            CANVAS_WIDTH - SPACE_SIZE - SPACE_MARGIN, 
-            snapToGrid(rawX, SPACE_SIZE)
+            CANVAS_WIDTH - SPACE_WIDTH - SPACE_MARGIN, 
+            snapToGrid(rawX, GRID_SIZE)
           )),
           y: Math.max(SPACE_MARGIN, Math.min(
-            CANVAS_HEIGHT - SPACE_SIZE - SPACE_MARGIN, 
-            snapToGrid(rawY, SPACE_SIZE)
+            CANVAS_HEIGHT - SPACE_HEIGHT - SPACE_MARGIN, 
+            snapToGrid(rawY, GRID_SIZE)
           )),
           floor: 1
         };
@@ -221,7 +223,7 @@ const SpaceLayoutDashboard: React.FC = () => {
       </div>
 
       {/* Sidebar */}
-      <div className="w-25 bg-white border-l border-gray-200 flex flex-col">
+      <div className="w-80 bg-white border-l border-gray-200 flex flex-col">
         <div className="p-4 border-b border-gray-200">
           <h3 className="font-medium text-gray-900">Unpositioned Spaces</h3>
           <p className="text-sm text-gray-500 mt-1">
@@ -368,7 +370,7 @@ const CanvasDropZone: React.FC<CanvasDropZoneProps> = ({
               linear-gradient(to right, #6b7280 1px, transparent 1px),
               linear-gradient(to bottom, #6b7280 1px, transparent 1px)
             `,
-            backgroundSize: `${SPACE_SIZE * 5}px ${SPACE_SIZE * 5}px`
+            backgroundSize: `${GRID_SIZE * 5}px ${GRID_SIZE * 5}px`
           }}
         />
         
@@ -379,25 +381,25 @@ const CanvasDropZone: React.FC<CanvasDropZoneProps> = ({
               linear-gradient(to right, #9ca3af 1px, transparent 1px),
               linear-gradient(to bottom, #9ca3af 1px, transparent 1px)
             `,
-            backgroundSize: `${SPACE_SIZE}px ${SPACE_SIZE}px`
+            backgroundSize: `${GRID_SIZE}px ${GRID_SIZE}px`
           }}
         />
         
-        {Array.from({ length: Math.floor(canvasWidth / (SPACE_SIZE * 5)) + 1 }, (_, i) => (
+        {Array.from({ length: Math.floor(canvasWidth / (GRID_SIZE * 5)) + 1 }, (_, i) => (
           <div
             key={`v-${i}`}
             className="absolute top-2 text-xs text-gray-400 font-mono pointer-events-none"
-            style={{ left: i * SPACE_SIZE * 5 + 4 }}
+            style={{ left: i * GRID_SIZE * 5 + 4 }}
           >
             {i * 5}
           </div>
         ))}
         
-        {Array.from({ length: Math.floor(canvasHeight / (SPACE_SIZE * 5)) + 1 }, (_, i) => (
+        {Array.from({ length: Math.floor(canvasHeight / (GRID_SIZE * 5)) + 1 }, (_, i) => (
           <div
             key={`h-${i}`}
             className="absolute left-2 text-xs text-gray-400 font-mono pointer-events-none"
-            style={{ top: i * SPACE_SIZE * 5 + 4 }}
+            style={{ top: i * GRID_SIZE * 5 + 4 }}
           >
             {i * 5}
           </div>
@@ -453,7 +455,11 @@ const CanvasDropZone: React.FC<CanvasDropZoneProps> = ({
 };
 
 // Sidebar Drop Zone Component  
-const SidebarDropZone: React.FC<SidebarDropZoneProps> = ({ unpositionedSpaces, onSpaceClick, isEditMode }) => {
+const SidebarDropZone: React.FC<SidebarDropZoneProps> = ({ 
+  unpositionedSpaces, 
+  onSpaceClick, 
+  isEditMode 
+}) => {
   const { setNodeRef, isOver } = useDroppable({
     id: 'sidebar'
   });
@@ -532,10 +538,16 @@ const DraggableSpace: React.FC<DraggableSpaceProps> = ({ space, style, onClick, 
 };
 
 // Space Item Component
-const SpaceItem: React.FC<SpaceItemProps> = ({ space, isDragging = false, style, onClick, isEditMode = false }) => {
-  const statusColor = space.status === 'ວ່າງ' ? 'bg-green-500' 
-    : space.status === 'ເຊົ່າແລ້ວ' ? 'bg-blue-500'
-    : space.status === 'ຊ່ອມແຊມ' ? 'bg-orange-500' : 'bg-gray-500';
+const SpaceItem: React.FC<SpaceItemProps> = ({ 
+  space, 
+  isDragging = false, 
+  style, 
+  onClick, 
+  isEditMode = false 
+}) => {
+  const statusColor = space.status === 'vacant' ? 'bg-green-500' 
+    : space.status === 'rented' ? 'bg-blue-500'
+    : space.status === 'maintainance' ? 'bg-orange-500' : 'bg-gray-500';
 
   const getPaymentIcon = (): React.ReactNode => {
     const status = space.paymentStatus?.currentStatus;
@@ -547,8 +559,17 @@ const SpaceItem: React.FC<SpaceItemProps> = ({ space, isDragging = false, style,
     }
   };
 
+  const getPaymentFrequencyDisplay = (): string => {
+    switch (space.paymentFrequency) {
+      case 'daily': return 'ມື້';
+      case 'monthly': return 'ດ'; 
+      case 'yearly': return 'ປີ';
+      default: return 'ດ';
+    }
+  };
+
   const getDisplayCode = (): string => {
-    if (space.spaceType === 'ໂຕະ' && space.spaceCode.length > 3) {
+    if (space.spaceType === 'table' && space.spaceCode.length > 3) {
       return space.spaceCode.slice(-3);
     }
     return space.spaceCode.length > 4 ? space.spaceCode.slice(-4) : space.spaceCode;
@@ -565,7 +586,7 @@ const SpaceItem: React.FC<SpaceItemProps> = ({ space, isDragging = false, style,
   return (
     <div 
       className={`
-        rounded-lg shadow-md border-2 border-white relative
+        space-item rounded-lg shadow-md border-2 border-white relative
         transition-all duration-200 hover:shadow-lg select-none
         ${statusColor}
         ${isDragging ? 'shadow-xl scale-110' : ''}
@@ -573,17 +594,26 @@ const SpaceItem: React.FC<SpaceItemProps> = ({ space, isDragging = false, style,
         ${isEditMode ? 'cursor-move' : ''}
       `}
       style={{
-        width: `${SPACE_SIZE}px`,
-        height: `${SPACE_SIZE}px`,
+        width: `${SPACE_WIDTH}px`,
+        height: `${SPACE_HEIGHT}px`,
         ...style
       }}
       onClick={handleClick}
     >
-      {/* Space Code */}
-      <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
-        <span className="text-white text-xs font-bold leading-none text-center">
-          {getDisplayCode()}
-        </span>
+      {/* Space Information */}
+      <div className="absolute inset-2 flex flex-col justify-between pointer-events-none text-white text-sm font-medium overflow-hidden">
+        {/* Top Row */}
+        <div className="flex justify-between items-start">
+          <span className="truncate text-[9px] leading-tight">
+            {space?.currentTenantName?.trim() || "ບໍ່ມີຜູ້ເຊົ່າ"}
+          </span>
+        </div>
+        
+        {/* Bottom Row */}
+        <div className="flex justify-between items-end">
+          <span className="leading-tight text-[9px]">{getPaymentFrequencyDisplay()} | </span>
+          <span className="text-[9px] leading-tight">{getDisplayCode()}</span>
+        </div>
       </div>
       
       {/* Payment Status Icon */}
@@ -599,18 +629,18 @@ const SpaceItem: React.FC<SpaceItemProps> = ({ space, isDragging = false, style,
       {/* Edit Mode Indicator */}
       {isEditMode && (
         <div className="absolute top-0 left-0 w-full h-full bg-yellow-200 bg-opacity-20 border-2 border-yellow-400 border-dashed rounded-lg pointer-events-none">
-          <div className="absolute bottom-0 right-0 bg-yellow-400 text-yellow-900 text-xs px-1 rounded-tl">
-            EDIT
+          <div className="absolute top-1 left-1 bg-yellow-400 text-yellow-900 text-xs px-1 rounded">
+            {SPACE_WIDTH}x{SPACE_HEIGHT}
           </div>
         </div>
       )}
 
       {/* Tooltip */}
       <div className="absolute bottom-full left-1/2 transform -translate-x-1/2 mb-2 px-2 py-1 bg-gray-900 text-white text-xs rounded opacity-0 hover:opacity-100 transition-opacity pointer-events-none whitespace-nowrap z-10">
-        {space.spaceCode} - {space.status}
+        {space.spaceCode} - {space.status} ({SPACE_WIDTH}x{SPACE_HEIGHT})
         <br />
         {!isEditMode && <span className="text-blue-200">Click to view details</span>}
-        {isEditMode && <span className="text-yellow-200">Drag to reposition</span>}
+        {isEditMode && <span className="text-yellow-200">Drag to move</span>}
       </div>
     </div>
   );

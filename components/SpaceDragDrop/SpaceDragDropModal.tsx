@@ -25,18 +25,18 @@ const SpaceDragDropModal: React.FC<SpaceDragDropModalProps> = ({
 
   const getStatusColor = (status: Space['status']): string => {
     switch (status) {
-      case 'ວ່າງ': return 'bg-green-100 text-green-800 border-green-200';
-      case 'ເຊົ່າແລ້ວ': return 'bg-blue-100 text-blue-800 border-blue-200';
-      case 'ຊ່ອມແຊມ': return 'bg-orange-100 text-orange-800 border-orange-200';
+      case 'vacant': return 'bg-green-100 text-green-800 border-green-200';
+      case 'rented': return 'bg-blue-100 text-blue-800 border-blue-200';
+      case 'maintainance': return 'bg-orange-100 text-orange-800 border-orange-200';
       default: return 'bg-gray-100 text-gray-800 border-gray-200';
     }
   };
 
   const getStatusLabel = (status: Space['status']): string => {
     switch (status) {
-      case 'ວ່າງ': return 'ວ່າງ (Vacant)';
-      case 'ເຊົ່າແລ້ວ': return 'ເຊົ່າແລ້ວ (Rented)';
-      case 'ຊ່ອມແຊມ': return 'ຊ່ອມແຊມ (Maintenance)';
+      case 'vacant': return 'ວ່າງ (Vacant)';
+      case 'rented': return 'ເຊົ່າແລ້ວ (Rented)';
+      case 'maintainance': return 'ຊ່ອມແຊມ (Maintenance)';
       default: return status;
     }
   };
@@ -62,10 +62,10 @@ const SpaceDragDropModal: React.FC<SpaceDragDropModalProps> = ({
 
   const getSpaceTypeLabel = (type: Space['spaceType']): string => {
     switch (type) {
-      case 'ໂຕະ': return 'ໂຕະ (Table)';
-      case 'ຫ້ອງເຊົ່າ': return 'ຫ້ອງເຊົ່າ (Room)';
-      case 'ປ້າຍ': return 'ປ້າຍ (Signage)';
-      case 'ບູດ': return 'ບູດ (Booth)';
+      case 'table': return 'ໂຕະ (Table)';
+      case 'room': return 'ຫ້ອງເຊົ່າ (Room)';
+      case 'signage': return 'ປ້າຍ (Signage)';
+      case 'booth': return 'ບູດ (Booth)';
       default: return type;
     }
   };
@@ -155,7 +155,7 @@ const SpaceDragDropModal: React.FC<SpaceDragDropModalProps> = ({
       case 'tenant':
         return (
           <div className="space-y-4">
-            {space.status === 'ເຊົ່າແລ້ວ' && space.currentTenantId ? (
+            {space.status === 'rented' && space.currentTenantId ? (
               <div>
                 <div className="flex items-center justify-between mb-4">
                   <h4 className="font-medium text-gray-900">ຂໍ້ມູນຼູ້ເຊົ່າ</h4>

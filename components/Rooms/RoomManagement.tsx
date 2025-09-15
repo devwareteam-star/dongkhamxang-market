@@ -37,7 +37,7 @@ const SpaceManagement: React.FC = () => {
     return matchesSearch && matchesStatus && matchesType && matchesZone && matchesPayment;
   }).sort((a, b) => {
     // Define the order: Table, Room, Booth, Signage
-    const typeOrder = { 'ໂຕະ': 1, 'ຫ້ອງເຊົ່າ': 2, 'ບູດ': 3, 'ປ້າຍ': 4 };
+    const typeOrder = { 'table': 1, 'room': 2, 'booth': 3, 'signage': 4 };
     
     // Primary sort by space type
     const typeComparison = typeOrder[a.spaceType] - typeOrder[b.spaceType];
@@ -101,9 +101,9 @@ const SpaceManagement: React.FC = () => {
 
 const getStatusBadge = (status: Space['status']) => {
   const colors = {
-    'ເຊົ່າແລ້ວ': 'bg-green-100 text-green-800',
-    'ວ່າງ': 'bg-yellow-100 text-yellow-800',
-    'ຊ່ອມແຊມ': 'bg-red-400 text-white'
+    'rented': 'bg-green-100 text-green-800',
+    'vacant': 'bg-yellow-100 text-yellow-800',
+    'maintainance': 'bg-red-400 text-white'
   };
   
   return (
@@ -115,10 +115,10 @@ const getStatusBadge = (status: Space['status']) => {
 
   const getTypeBadge = (type: Space['spaceType']) => {
     const colors = {
-      'ໂຕະ': 'bg-blue-100 text-blue-800',
-      'ຫ້ອງເຊົ່າ': 'bg-purple-100 text-purple-800',
-      'ປ້າຍ': 'bg-orange-100 text-orange-800',
-      'ບູດ': 'bg-teal-100 text-teal-800'
+      'table': 'bg-blue-100 text-blue-800',
+      'room': 'bg-purple-100 text-purple-800',
+      'signage': 'bg-orange-100 text-orange-800',
+      'booth': 'bg-teal-100 text-teal-800'
     };
     return (
       <span className={`px-2 py-1 text-xs font-medium rounded-full ${colors[type] || 'bg-gray-100 text-gray-800'}`}>
@@ -185,7 +185,7 @@ const getStatusBadge = (status: Space['status']) => {
             </select>
           </div>
 
-          {spaces.some(space => space.spaceType === 'ຫ້ອງເຊົ່າ') && (
+          {spaces.some(space => space.spaceType === 'room') && (
   <div className="relative">
     <select
       value={zoneFilter}
@@ -232,7 +232,7 @@ const getStatusBadge = (status: Space['status']) => {
 
                 <th className="px-6 py-4 text-left text-sm font-medium text-gray-900">ລະຫັດພື້ນທີ່</th>
     {/* Only show zone column if we have rooms in the filtered results */}
-    {filteredSpaces.some(space => space.spaceType === 'ຫ້ອງເຊົ່າ') && (
+    {filteredSpaces.some(space => space.spaceType === 'room') && (
       <th className="px-6 py-4 text-left text-sm font-medium text-gray-900">ໂຊນ</th>
     )}
     <th className="px-6 py-4 text-left text-sm font-medium text-gray-900">ສະຖານະ</th>
@@ -258,9 +258,9 @@ const getStatusBadge = (status: Space['status']) => {
                       <div className="font-medium text-gray-900">{space.spaceCode}</div>
                     </td>
                    
-                    {filteredSpaces.some(space => space.spaceType === 'ຫ້ອງເຊົ່າ') && (
+                    {filteredSpaces.some(space => space.spaceType === 'room') && (
   <td className="px-6 py-4 whitespace-nowrap">
-    {space.spaceType === 'ຫ້ອງເຊົ່າ' ? (
+    {space.spaceType === 'room' ? (
       <div className="flex items-center text-gray-700">
         <MapPin className="w-3 h-3 mr-1" />
         {space.zone}

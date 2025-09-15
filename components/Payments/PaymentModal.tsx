@@ -7,21 +7,21 @@ import { Payment , Space, Tenant} from '@/types';
 interface PaymentModalProps {
   isOpen: boolean;
   onClose: () => void;
-  onSubmit: (data: { paymentMethod: 'ເງິນສົດ' | 'ໂອນເງິນ' | 'BCEL' | 'JDB'; notes?: string; }) => Promise<void>;
+  onSubmit: (data: { paymentMethod: 'cash' | 'transfer' | undefined; notes?: string; }) => Promise<void>;
   payment: Payment | null;
   spaces: Space[]; // Add this
   tenants: Tenant[]; // Add this for future use
 }
 
 const PaymentModal: React.FC<PaymentModalProps> = ({ isOpen, onClose, onSubmit, payment, spaces, tenants }) => {
-  const [paymentMethod, setPaymentMethod] = useState<'ເງິນສົດ' | 'ໂອນເງິນ' | 'BCEL' | 'JDB'>('ເງິນສົດ');
+  const [paymentMethod, setPaymentMethod] = useState<'cash' | 'transfer' | undefined>('cash');
   const [notes, setNotes] = useState('');
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     onSubmit({ paymentMethod, notes: notes.trim() || undefined });
     setNotes('');
-    setPaymentMethod('ເງິນສົດ');
+    setPaymentMethod('cash');
   };
 
   if (!isOpen || !payment) return null;
@@ -80,9 +80,9 @@ const tenant = tenants.find(t => t.tenantId === payment.tenantId);
               <div className="grid grid-cols-2 gap-3">
                 <button
                   type="button"
-                  onClick={() => setPaymentMethod('ເງິນສົດ')}
+                  onClick={() => setPaymentMethod('cash')}
                   className={`flex items-center justify-center space-x-2 p-4 border-2 rounded-lg transition-all ${
-                    paymentMethod === 'ເງິນສົດ'
+                    paymentMethod === 'cash'
                       ? 'border-green-500 bg-green-50 text-green-700'
                       : 'border-gray-300 hover:border-gray-400 text-gray-700'
                   }`}
@@ -92,9 +92,9 @@ const tenant = tenants.find(t => t.tenantId === payment.tenantId);
                 </button>
                 <button
                   type="button"
-                  onClick={() => setPaymentMethod('ໂອນເງິນ')}
+                  onClick={() => setPaymentMethod('transfer')}
                   className={`flex items-center justify-center space-x-2 p-4 border-2 rounded-lg transition-all ${
-                    paymentMethod === 'ໂອນເງິນ'
+                    paymentMethod === 'transfer'
                       ? 'border-blue-500 bg-blue-50 text-blue-700'
                       : 'border-gray-300 hover:border-gray-400 text-gray-700'
                   }`}
@@ -106,7 +106,7 @@ const tenant = tenants.find(t => t.tenantId === payment.tenantId);
             </div>
 
             {/* QR Code for Transfer */}
-            {paymentMethod === 'ໂອນເງິນ' && (
+            {paymentMethod === 'transfer' && (
               <div className="bg-blue-50 rounded-lg p-6 text-center">
                 <h3 className="font-medium text-blue-900 mb-4">สแกน QR Code เพื่อโอนเงิน</h3>
                 <div className="bg-white p-4 rounded-lg inline-block shadow-sm">
