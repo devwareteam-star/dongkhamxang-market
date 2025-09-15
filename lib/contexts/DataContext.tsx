@@ -298,21 +298,34 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({
         );
       setPayments(enhancedPayments as Payment[]);
 
+      // In loadData function, replace the setTimeout with:
+// const enhancedPayments = paymentsData
+//   .map(convertTimestamps)
+//   .map((payment) =>
+//     enhancePaymentWithLegacyFields(payment, processedTenants, processedSpaces)
+//   );
+// setPayments(enhancedPayments as Payment[]);
+
+// Process late fees AFTER setting payments
+if (enhancedPayments.length > 0) {
+  setTimeout(async () => {
+    try {
+      // Pass the payments array directly instead of relying on state
+      console.log("Processing late fees with", enhancedPayments.length, "payments");
+      await processLateFees(enhancedPayments);
+    } catch (error) {
+      console.error("Failed to process late fees:", error);
+    }
+  }, 1000); // Reduced delay since we know data is ready
+}
+
       setBills(billsData.map(convertTimestamps) as Bill[]);
       setUsers(usersData.map(convertTimestamps) as User[]);
       setNotifications(
         notificationsData.map(convertTimestamps) as Notification[]
       );
 
-      // Process late fees after data loads with a small delay
-      setTimeout(async () => {
-        try {
-          await processLateFees();
-          console.log("Late fees processed successfully");
-        } catch (error) {
-          console.error("Failed to process late fees:", error);
-        }
-      }, 2000);
+    
 
       console.log("Data loaded successfully from Firebase");
     } catch (error) {
@@ -468,33 +481,30 @@ if (lastPaidPayment) {
   // First payment - use today's date for all frequencies
   const today = new Date();
 
-  switch (frequency) {
+    switch (frequency) {
     case "daily":
-      // Use today's date for first daily payment
+      // Daily payment should be due TOMORROW
       nextDueDate = new Date(today);
+      nextDueDate.setDate(nextDueDate.getDate() + 1); // Add 1 day
       calculatedPeriod = `${nextDueDate.getFullYear()}-${String(
         nextDueDate.getMonth() + 1
-      ).padStart(2, "0")}-${String(nextDueDate.getDate()).padStart(
-        2,
-        "0"
-      )}`;
+      ).padStart(2, "0")}-${String(nextDueDate.getDate()).padStart(2, "0")}`;
       break;
 
     case "monthly":
-      // Use today's date for first monthly payment
+      // Monthly payment should be due in 30 days
       nextDueDate = new Date(today);
+      nextDueDate.setDate(nextDueDate.getDate() + 30); // Add 30 days
       calculatedPeriod = `${nextDueDate.getFullYear()}-${String(
         nextDueDate.getMonth() + 1
       ).padStart(2, "0")}`;
       break;
 
     case "yearly":
-      // Use current year for first yearly payment
-      const currentYear = today.getFullYear();
-      calculatedPeriod = currentYear.toString();
-      
-      // Use today's date for first yearly payment
+      // Yearly payment should be due in 365 days
       nextDueDate = new Date(today);
+      nextDueDate.setDate(nextDueDate.getDate() + 365); // Add 365 days
+      calculatedPeriod = nextDueDate.getFullYear().toString();
       break;
   }
 }
@@ -682,200 +692,201 @@ if (lastPaidPayment) {
 
   // NEW: Daily late fee processing function
   // Debug version of processLateFees function - CORRECTED
-  const processLateFees = async () => {
-    console.log("🔍 DEBUG: Starting late fee processing...");
+const processLateFees = async (paymentsToProcess = payments) => {
+  console.log("🔍 DEBUG: Total payments in array:", paymentsToProcess.length);
+  console.log("🔍 DEBUG: Sample payment dates:", paymentsToProcess.slice(0, 2).map(p => ({
+    id: p.paymentId || p.id,
+    dueDate: p.dueDate,
+    dueDateType: typeof p.dueDate,
+    originalDueDate: p.originalDueDate,
+    paymentStatus: p.paymentStatus
+  })));
+  console.log("🔍 DEBUG: Starting late fee processing...");
 
-    try {
-      // Check if late fees are enabled
-      if (!settings.lateFees.enableLateFees) {
-        console.log("❌ DEBUG: Late fees are disabled in settings");
-        return;
-      }
-      console.log("✅ DEBUG: Late fees are enabled");
-      console.log("📊 DEBUG: Settings:", {
-        enableLateFees: settings.lateFees.enableLateFees,
-        gracePeriodDays: settings.lateFees.gracePeriodDays,
-        tier1: settings.lateFees.tier1,
-        tier2: settings.lateFees.tier2,
-        tier3: settings.lateFees.tier3,
-        tier4: settings.lateFees.tier4,
-        tier5: settings.lateFees.tier5,
-      });
-
-      // Filter unpaid payments
-      const unpaidPayments = payments.filter(
-        (p) => p.paymentStatus === "pending" || p.paymentStatus  === "overdue" // Use English values
-      );
-
-      console.log(`🔍 DEBUG: Found ${unpaidPayments.length} unpaid payments`);
-      console.log(
-        "📋 DEBUG: Unpaid payments details:",
-        unpaidPayments.map((p) => ({
-          id: p.paymentId || p.id,
-          spaceId: p.spaceId, // FIXED: removed spaceCode reference
-          tenantId: p.tenantId,
-          status: p.paymentStatus,
-          originalDueDate: p.originalDueDate,
-          currentLateFee: p.lateFee,
-          originalAmount: p.originalAmount,
-        }))
-      );
-
-      if (unpaidPayments.length === 0) {
-        console.log("ℹ️ DEBUG: No unpaid payments found, exiting");
-        return;
-      }
-
-      // Process each payment
-      for (const payment of unpaidPayments) {
-        console.log(
-          `\n🔄 DEBUG: Processing payment ${payment.paymentId || payment.id}`
-        );
-        console.log("📅 DEBUG: Payment details:", {
-          spaceId: payment.spaceId, // FIXED: removed spaceCode reference
-          originalDueDate: payment.originalDueDate,
-          paymentStatus: payment.paymentStatus,
-          originalAmount: payment.originalAmount,
-          currentLateFee: payment.lateFee,
-        });
-
-        // Test the calculateDaysOverdue function
-        const today = new Date();
-        console.log("📅 DEBUG: Date comparison:", {
-          today: today.toISOString(),
-          originalDueDate: payment.originalDueDate,
-          originalDueDateISO: new Date(payment.originalDueDate).toISOString(),
-        });
-
-        const daysOverdue = calculateDaysOverdue(payment.originalDueDate);
-        console.log(`📊 DEBUG: Days overdue calculated: ${daysOverdue}`);
-
-        if (daysOverdue <= settings.lateFees.gracePeriodDays) {
-          console.log(
-            `⏭️ DEBUG: Skipping payment - ${daysOverdue} days is within grace period of ${settings.lateFees.gracePeriodDays} days`
-          );
-          continue;
-        }
-
-        console.log(
-          `⚠️ DEBUG: Payment is ${daysOverdue} days overdue (beyond grace period)`
-        );
-
-        // Test the calculateLateFee function
-        const lateFeeResult = calculateLateFee(
-          payment.originalAmount,
-          daysOverdue,
-          settings
-        );
-
-        console.log("💰 DEBUG: Late fee calculation result:", lateFeeResult);
-
-        // Check if late fee changed
-        const hasChanged =
-          lateFeeResult.lateFee !== payment.lateFee ||
-          lateFeeResult.rate !== payment.lateFeeRate;
-        console.log(`🔄 DEBUG: Late fee changed? ${hasChanged}`);
-        console.log("📊 DEBUG: Comparison:", {
-          newLateFee: lateFeeResult.lateFee,
-          oldLateFee: payment.lateFee,
-          newRate: lateFeeResult.rate,
-          oldRate: payment.lateFeeRate,
-        });
-
-        if (!hasChanged) {
-          console.log("⏭️ DEBUG: No changes needed, skipping update");
-          continue;
-        }
-
-        // FIXED: Prepare update data with proper types
-        const updateData: Partial<Payment> = {
-          lateFee: lateFeeResult.lateFee,
-          lateFeeRate: lateFeeResult.rate,
-          lateFeeApplied: lateFeeResult.lateFee > 0,
-          amountDue: payment.originalAmount + lateFeeResult.lateFee,
-          daysOverdue,
-          paymentStatus: (daysOverdue > 0 ? "overdue" : "pending") as
-            | "pending"
-            | "paid"
-            | "overdue"
-            | "partial",
-        };
-
-        console.log("📝 DEBUG: Update data prepared:", updateData);
-
-        try {
-          console.log(
-            `🔄 DEBUG: Attempting to update payment ${
-              payment.paymentId || payment.id
-            }...`
-          );
-
-          await updatePayment(payment.paymentId || payment.id, updateData);
-
-          console.log(
-            `✅ DEBUG: Successfully updated payment ${
-              payment.paymentId || payment.id
-            }`
-          );
-
-          // FIXED: Update corresponding space status with proper types
-          const space = spaces.find((s) => payment.spaceId.includes(s.id));
-          if (space) {
-            console.log(`🏢 DEBUG: Updating space ${space.spaceId} status...`); // FIXED: use spaceId
-
-            const spaceUpdateData: Partial<Space> = {
-              paymentStatus: {
-                currentStatus: "overdue" as
-                  | "no_tenant"
-                  | "pending"
-                  | "paid"
-                  | "overdue", // FIXED: proper type
-                currentPeriodPaid:
-                  space.paymentStatus?.currentPeriodPaid ?? false,
-                nextDueDate: space.paymentStatus?.nextDueDate,
-                lateFee: lateFeeResult.lateFee,
-                lateFeeApplied: lateFeeResult.lateFee > 0,
-                daysOverdue,
-                lastUpdated: new Date(),
-              },
-            };
-
-            console.log("🏢 DEBUG: Space update data:", spaceUpdateData);
-
-            await updateSpace(space.id, spaceUpdateData);
-            console.log(
-              `✅ DEBUG: Successfully updated space ${space.spaceId}`
-            ); // FIXED: use spaceId
-          } else {
-            console.log(
-              `⚠️ DEBUG: Space not found for payment ${payment.spaceId}`
-            );
-          }
-        } catch (updateError: any) {
-          // FIXED: proper error typing
-          console.error(
-            `❌ DEBUG: Failed to update payment ${
-              payment.paymentId || payment.id
-            }:`,
-            updateError
-          );
-          console.error("❌ DEBUG: Update error details:", {
-            message: updateError?.message || "Unknown error",
-            stack: updateError?.stack || "No stack trace",
-          });
-        }
-      }
-
-      console.log("🎉 DEBUG: Late fee processing completed");
-    } catch (error: any) {
-      // FIXED: proper error typing
-      console.error("❌ DEBUG: Error in processLateFees:", error);
-      console.error("❌ DEBUG: Error details:", {
-        message: error?.message || "Unknown error",
-        stack: error?.stack || "No stack trace",
-      });
+  try {
+    // Check if late fees are enabled
+    if (!settings.lateFees.enableLateFees) {
+      console.log("❌ DEBUG: Late fees are disabled in settings");
+      return;
     }
-  };
+    console.log("✅ DEBUG: Late fees are enabled");
+    console.log("📊 DEBUG: Settings:", {
+      enableLateFees: settings.lateFees.enableLateFees,
+      gracePeriodDays: settings.lateFees.gracePeriodDays,
+      tier1: settings.lateFees.tier1,
+      tier2: settings.lateFees.tier2,
+      tier3: settings.lateFees.tier3,
+      tier4: settings.lateFees.tier4,
+      tier5: settings.lateFees.tier5,
+    });
+
+    // Filter for actually overdue payments only
+    const unpaidPayments = paymentsToProcess.filter((p) => {
+      if (p.paymentStatus === "paid") return false;
+      
+      const today = new Date();
+      const todayStart = new Date(today.getFullYear(), today.getMonth(), today.getDate());
+      const dueDate = new Date(p.originalDueDate || p.dueDate);
+      
+      return dueDate < todayStart; // Only process overdue payments
+    });
+
+    console.log(`🔍 DEBUG: Found ${unpaidPayments.length} overdue payments`);
+    console.log(
+      "📋 DEBUG: Unpaid payments details:",
+      unpaidPayments.map((p) => ({
+        id: p.paymentId || p.id,
+        spaceId: p.spaceId,
+        tenantId: p.tenantId,
+        status: p.paymentStatus,
+        originalDueDate: p.originalDueDate,
+        currentLateFee: p.lateFee,
+        originalAmount: p.originalAmount,
+      }))
+    );
+
+    if (unpaidPayments.length === 0) {
+      console.log("ℹ️ DEBUG: No overdue payments found, exiting");
+      return;
+    }
+
+    // Process each payment
+    for (const payment of unpaidPayments) {
+      console.log(
+        `\n🔄 DEBUG: Processing payment ${payment.paymentId || payment.id}`
+      );
+      console.log("📅 DEBUG: Payment details:", {
+        spaceId: payment.spaceId,
+        originalDueDate: payment.originalDueDate,
+        paymentStatus: payment.paymentStatus,
+        originalAmount: payment.originalAmount,
+        currentLateFee: payment.lateFee,
+      });
+
+      // Test the calculateDaysOverdue function
+      const today = new Date();
+      console.log("📅 DEBUG: Date comparison:", {
+        today: today.toISOString(),
+        originalDueDate: payment.originalDueDate,
+        originalDueDateISO: new Date(payment.originalDueDate).toISOString(),
+      });
+
+      const daysOverdue = calculateDaysOverdue(payment.originalDueDate);
+      console.log(`📊 DEBUG: Days overdue calculated: ${daysOverdue}`);
+
+      if (daysOverdue <= settings.lateFees.gracePeriodDays) {
+        console.log(
+          `⏭️ DEBUG: Skipping payment - ${daysOverdue} days is within grace period of ${settings.lateFees.gracePeriodDays} days`
+        );
+        continue;
+      }
+
+      console.log(
+        `⚠️ DEBUG: Payment is ${daysOverdue} days overdue (beyond grace period)`
+      );
+
+      // Test the calculateLateFee function
+      const lateFeeResult = calculateLateFee(
+        payment.originalAmount,
+        daysOverdue,
+        settings
+      );
+
+      console.log("💰 DEBUG: Late fee calculation result:", lateFeeResult);
+
+      // Check if late fee changed
+      const hasChanged =
+        lateFeeResult.lateFee !== payment.lateFee ||
+        lateFeeResult.rate !== payment.lateFeeRate;
+      console.log(`🔄 DEBUG: Late fee changed? ${hasChanged}`);
+      console.log("📊 DEBUG: Comparison:", {
+        newLateFee: lateFeeResult.lateFee,
+        oldLateFee: payment.lateFee,
+        newRate: lateFeeResult.rate,
+        oldRate: payment.lateFeeRate,
+      });
+
+      if (!hasChanged) {
+        console.log("⏭️ DEBUG: No changes needed, skipping update");
+        continue;
+      }
+
+      // Prepare update data with proper types
+      const updateData: Partial<Payment> = {
+        lateFee: lateFeeResult.lateFee,
+        lateFeeRate: lateFeeResult.rate,
+        lateFeeApplied: lateFeeResult.lateFee > 0,
+        amountDue: payment.originalAmount + lateFeeResult.lateFee,
+        daysOverdue,
+        paymentStatus: "overdue" as "pending" | "paid" | "overdue" | "partial",
+      };
+
+      console.log("📝 DEBUG: Update data prepared:", updateData);
+
+      try {
+        console.log(
+          `🔄 DEBUG: Attempting to update payment ${
+            payment.paymentId || payment.id
+          }...`
+        );
+
+        await updatePayment(payment.paymentId || payment.id, updateData);
+
+        console.log(
+          `✅ DEBUG: Successfully updated payment ${
+            payment.paymentId || payment.id
+          }`
+        );
+
+        // Update corresponding space status with proper types
+        const space = spaces.find((s) => s.id === payment.spaceId);
+        if (space) {
+          console.log(`🏢 DEBUG: Updating space ${space.id} status...`);
+
+          const spaceUpdateData: Partial<Space> = {
+            paymentStatus: {
+              currentStatus: "overdue" as "no_tenant" | "pending" | "paid" | "overdue",
+              currentPeriodPaid: space.paymentStatus?.currentPeriodPaid ?? false,
+              nextDueDate: space.paymentStatus?.nextDueDate,
+              lateFee: lateFeeResult.lateFee,
+              lateFeeApplied: lateFeeResult.lateFee > 0,
+              daysOverdue,
+              lastUpdated: new Date(),
+            },
+          };
+
+          console.log("🏢 DEBUG: Space update data:", spaceUpdateData);
+
+          await updateSpace(space.id, spaceUpdateData);
+          console.log(`✅ DEBUG: Successfully updated space ${space.id}`);
+        } else {
+          console.log(
+            `⚠️ DEBUG: Space not found for payment ${payment.spaceId}`
+          );
+        }
+      } catch (updateError: any) {
+        console.error(
+          `❌ DEBUG: Failed to update payment ${
+            payment.paymentId || payment.id
+          }:`,
+          updateError
+        );
+        console.error("❌ DEBUG: Update error details:", {
+          message: updateError?.message || "Unknown error",
+          stack: updateError?.stack || "No stack trace",
+        });
+      }
+    }
+
+    console.log("🎉 DEBUG: Late fee processing completed");
+  } catch (error: any) {
+    console.error("❌ DEBUG: Error in processLateFees:", error);
+    console.error("❌ DEBUG: Error details:", {
+      message: error?.message || "Unknown error",
+      stack: error?.stack || "No stack trace",
+    });
+  }
+};
 
   
 
