@@ -31,9 +31,9 @@ const tenant = tenants.find(t => t.tenantId === payment.tenantId);
 
   const getPaymentTypeText = (type: Payment['paymentType']) => {
     switch (type) {
-      case 'daily': return 'รายวัน';
-      case 'monthly': return 'รายเดือน';
-      case 'yearly': return 'รายปี';
+      case 'daily': return 'ລາຍວັນ';
+      case 'monthly': return 'ລາຍເດືອນ';
+      case 'yearly': return 'ລາຍປີ';
       default: return type;
     }
   };
@@ -46,7 +46,7 @@ const tenant = tenants.find(t => t.tenantId === payment.tenantId);
             <div className="bg-green-100 p-2 rounded-lg">
               <CreditCard className="w-6 h-6 text-green-600" />
             </div>
-            <h2 className="text-xl font-semibold text-gray-900">เก็บเงินค่าเช่า</h2>
+            <h2 className="text-xl font-semibold text-gray-900">ເກັບເງິນຄ່າເຊົ່າ</h2>
           </div>
           <button
             onClick={onClose}
@@ -59,14 +59,14 @@ const tenant = tenants.find(t => t.tenantId === payment.tenantId);
         <div className="p-6">
           {/* Payment Details */}
           <div className="bg-blue-50 rounded-lg p-4 mb-6">
-            <h3 className="font-medium text-blue-900 mb-2">รายละเอียดการชำระ</h3>
+            <h3 className="font-medium text-blue-900 mb-2">ລາຍລະອຽດການຈ່າຍ</h3>
             <div className="space-y-1 text-sm">
-              <p><span className="text-blue-700">ห้อง:</span> {room?.spaceCode || 'ไม่ระบุ'}</p>
-              <p><span className="text-blue-700">จำนวนเงิน:</span> ฿{payment.amount.toLocaleString()}</p>
-              <p><span className="text-blue-700">รอบชำระ:</span> {getPaymentTypeText(payment.paymentType)}</p>
-              <p><span className="text-blue-700">กำหนดชำระ:</span> {new Date(payment.dueDate).toLocaleDateString('th-TH')}</p>
+              <p><span className="text-blue-700">ຫ້ອງ:</span> {room?.spaceCode || 'ບໍ່ລະບຸ'}</p>
+              <p><span className="text-blue-700">ຈຳນວນເງິນ:</span> ₭{payment.amount.toLocaleString()}</p>
+              <p><span className="text-blue-700">ຮອບຈ່າຍ:</span> {getPaymentTypeText(payment.paymentType)}</p>
+              <p><span className="text-blue-700">ກຳນົດຈ່າຍ:</span> {new Date(payment.dueDate).toLocaleDateString('lo-LA')}</p>
               {payment.lateFee && payment.lateFee > 0 && (
-                <p><span className="text-red-700">ค่าปรับ:</span> ฿{payment.lateFee.toLocaleString()}</p>
+                <p><span className="text-red-700">ຄ່າປັບ:</span> ₭{payment.lateFee.toLocaleString()}</p>
               )}
             </div>
           </div>
@@ -75,7 +75,7 @@ const tenant = tenants.find(t => t.tenantId === payment.tenantId);
             {/* Payment Method */}
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-3">
-                วิธีการชำระเงิน
+                ວິທີການຈ່າຍເງິນ
               </label>
               <div className="grid grid-cols-2 gap-3">
                 <button
@@ -88,7 +88,7 @@ const tenant = tenants.find(t => t.tenantId === payment.tenantId);
                   }`}
                 >
                   <Banknote className="w-5 h-5" />
-                  <span className="font-medium">เงินสด</span>
+                  <span className="font-medium">ເງິນສົດ</span>
                 </button>
                 <button
                   type="button"
@@ -100,7 +100,7 @@ const tenant = tenants.find(t => t.tenantId === payment.tenantId);
                   }`}
                 >
                   <Smartphone className="w-5 h-5" />
-                  <span className="font-medium">โอนเงิน</span>
+                  <span className="font-medium">ໂອນເງິນ</span>
                 </button>
               </div>
             </div>
@@ -108,18 +108,18 @@ const tenant = tenants.find(t => t.tenantId === payment.tenantId);
             {/* QR Code for Transfer */}
             {paymentMethod === 'transfer' && (
               <div className="bg-blue-50 rounded-lg p-6 text-center">
-                <h3 className="font-medium text-blue-900 mb-4">สแกน QR Code เพื่อโอนเงิน</h3>
+                <h3 className="font-medium text-blue-900 mb-4">ສະແກນ QR Code ເພື່ອໂອນເງິນ</h3>
                 <div className="bg-white p-4 rounded-lg inline-block shadow-sm">
                   <div className="w-48 h-48 mx-auto bg-gray-200 rounded-lg flex items-center justify-center">
                     <div className="text-center">
                       <Smartphone className="w-12 h-12 text-gray-400 mx-auto mb-2" />
-                      <p className="text-sm text-gray-500">QR Code สำหรับโอนเงิน</p>
-                      <p className="text-xs text-gray-400 mt-1">฿{payment.amount.toLocaleString()}</p>
+                      <p className="text-sm text-gray-500">QR Code ສຳລັບໂອນເງິນ</p>
+                      <p className="text-xs text-gray-400 mt-1">₭{payment.amount.toLocaleString()}</p>
                     </div>
                   </div>
                 </div>
                 <p className="text-sm text-blue-700 mt-3">
-                  กรุณาโอนเงินจำนวน ฿{payment.amount.toLocaleString()} และแจ้งการโอนเงิน
+                  ກະລຸນາໂອນເງິນຈຳນວນ ₭{payment.amount.toLocaleString()} ແລະແຈ້ງການໂອນເງິນ
                 </p>
               </div>
             )}
@@ -127,28 +127,28 @@ const tenant = tenants.find(t => t.tenantId === payment.tenantId);
             {/* Notes */}
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-2">
-                หมายเหตุ (ไม่บังคับ)
+                ໝາຍເຫດ (ບໍ່ບັງຄັບ)
               </label>
               <textarea
                 value={notes}
                 onChange={(e) => setNotes(e.target.value)}
                 className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
                 rows={3}
-                placeholder="หมายเหตุเพิ่มเติม..."
+                placeholder="ໝາຍເຫດເພີ່ມເຕີມ..."
               />
             </div>
 
             {/* Total Amount Display */}
             <div className="bg-gray-50 rounded-lg p-4">
               <div className="flex justify-between items-center">
-                <span className="text-gray-700">ยอดรวมที่ต้องชำระ:</span>
+                <span className="text-gray-700">ຍອດລວມທີ່ຕ້ອງຈ່າຍ:</span>
                 <span className="text-2xl font-bold text-green-600">
-                  ฿{(payment.amount + (payment.lateFee || 0)).toLocaleString()}
+                  ₭{(payment.amount + (payment.lateFee || 0)).toLocaleString()}
                 </span>
               </div>
               {payment.lateFee && payment.lateFee > 0 && (
                 <div className="text-sm text-gray-600 mt-1">
-                  (ค่าเช่า ฿{payment.amount.toLocaleString()} + ค่าปรับ ฿{payment.lateFee.toLocaleString()})
+                  (ຄ່າເຊົ່າ ₭{payment.amount.toLocaleString()} + ຄ່າປັບ ₭{payment.lateFee.toLocaleString()})
                 </div>
               )}
             </div>
@@ -160,13 +160,13 @@ const tenant = tenants.find(t => t.tenantId === payment.tenantId);
                 onClick={onClose}
                 className="flex-1 px-6 py-3 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 transition-colors"
               >
-                ยกเลิก
+                ຍົກເລີກ
               </button>
               <button
                 type="submit"
                 className="flex-1 px-6 py-3 bg-green-600 hover:bg-green-700 text-white rounded-lg transition-colors font-medium"
               >
-                ยืนยันการชำระ
+                ຢືນຢັນການຈ່າຍ
               </button>
             </div>
           </form>

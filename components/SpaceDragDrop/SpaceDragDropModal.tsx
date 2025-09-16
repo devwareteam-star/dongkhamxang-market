@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { X, Building2, User, CreditCard, Calendar, MapPin, Phone, Mail, AlertCircle, CheckCircle, Clock, AlertTriangle, Edit3, Trash2, UserX } from 'lucide-react';
-import { Space } from '@/types';
+import { Space, Payment, Tenant } from '@/types';
+import PaymentModal from '../Payments/PaymentModal';
 
 interface SpaceDragDropModalProps {
   isOpen: boolean;
@@ -9,6 +10,10 @@ interface SpaceDragDropModalProps {
   onEdit?: (space: Space) => void;
   onStatusChange?: (spaceId: string, status: Space['status']) => void;
   onRemoveTenant?: (spaceId: string) => void;
+  // Add these new props
+  payments?: Payment[];
+  tenants?: Tenant[];
+  onPaymentCollected?: (paymentData: any) => Promise<void>;
 }
 
 const SpaceDragDropModal: React.FC<SpaceDragDropModalProps> = ({
@@ -17,11 +22,62 @@ const SpaceDragDropModal: React.FC<SpaceDragDropModalProps> = ({
   space,
   onEdit,
   onStatusChange,
-  onRemoveTenant
+  onRemoveTenant,
+  payments = [],
+  tenants = [],
+  onPaymentCollected
 }) => {
   const [activeTab, setActiveTab] = useState<'details' | 'tenant' | 'payments' | 'history'>('details');
+  
+  // Add payment modal state
+  const [isPaymentModalOpen, setIsPaymentModalOpen] = useState(false);
+  const [selectedPayment, setSelectedPayment] = useState<Payment | null>(null);
 
   if (!isOpen || !space) return null;
+
+  // Add function to find payments for this space
+  const getSpacePayments = () => {
+    return payments.filter(payment => 
+      payment.spaceId === space.id && payment.paymentStatus !== 'paid'
+    );
+  };
+
+  // Add function to find tenant for this space
+  const getSpaceTenant = () => {
+    return tenants.find(tenant => tenant.tenantId === space.currentTenantId);
+  };
+
+  // Add payment collection handler
+  const handleCollectPayment = () => {
+    const spacePayments = getSpacePayments();
+    if (spacePayments.length > 0) {
+      // If multiple payments, you might want to show a selection or take the most urgent one
+      const mostUrgentPayment = spacePayments.sort((a, b) => {
+        // Sort by overdue first, then by due date
+        if (a.paymentStatus === 'overdue' && b.paymentStatus !== 'overdue') return -1;
+        if (b.paymentStatus === 'overdue' && a.paymentStatus !== 'overdue') return 1;
+        return new Date(a.dueDate).getTime() - new Date(b.dueDate).getTime();
+      })[0];
+      
+      setSelectedPayment(mostUrgentPayment);
+      setIsPaymentModalOpen(true);
+    }
+  };
+
+  const handlePaymentModalClose = () => {
+    setIsPaymentModalOpen(false);
+    setSelectedPayment(null);
+  };
+
+  const handlePaymentSubmit = async (data: { paymentMethod: 'cash' | 'transfer' | undefined; notes?: string | undefined }) => {
+    if (onPaymentCollected && selectedPayment) {
+      await onPaymentCollected({
+        payment: selectedPayment,
+        ...data
+      });
+      handlePaymentModalClose();
+    }
+  };
 
   const getStatusColor = (status: Space['status']): string => {
     switch (status) {
@@ -174,21 +230,40 @@ const SpaceDragDropModal: React.FC<SpaceDragDropModalProps> = ({
                   <div className="flex items-center space-x-3 mb-3">
                     <User className="w-8 h-8 text-blue-600" />
                     <div>
+                      <p className="font-medium text-gray-900">{space.currentTenantName}</p>
                       <p className="text-sm text-gray-600">ID: {space.currentTenantId}</p>
                     </div>
                   </div>
                   
-                  {/* Mock contact information - replace with real data */}
-                  <div className="grid grid-cols-1 gap-2 text-sm">
-                    <div className="flex items-center space-x-2">
-                      <Phone className="w-4 h-4 text-gray-400" />
-                      <span className="text-gray-600">+856 20 1234 5678</span>
-                    </div>
-                    <div className="flex items-center space-x-2">
-                      <Mail className="w-4 h-4 text-gray-400" />
-                      <span className="text-gray-600">tenant@example.com</span>
-                    </div>
-                  </div>
+                  {/* Real tenant data if available */}
+                  {(() => {
+                    const tenant = getSpaceTenant();
+                    return tenant ? (
+                      <div className="grid grid-cols-1 gap-2 text-sm">
+                        <div className="flex items-center space-x-2">
+                          <Phone className="w-4 h-4 text-gray-400" />
+                          <span className="text-gray-600">{tenant.contact || '+856 20 1234 5678'}</span>
+                        </div>
+                        <div className="flex items-center space-x-2">
+                          <Calendar className="w-4 h-4 text-gray-400" />
+                          <span className="text-gray-600">
+                            ເລີ່ມເຊົ່າ: {tenant.createdAt ? tenant.createdAt.toLocaleDateString('lo-LA') : 'N/A'}
+                          </span>
+                        </div>
+                      </div>
+                    ) : (
+                      <div className="grid grid-cols-1 gap-2 text-sm">
+                        <div className="flex items-center space-x-2">
+                          <Phone className="w-4 h-4 text-gray-400" />
+                          <span className="text-gray-600">+856 20 1234 5678</span>
+                        </div>
+                        <div className="flex items-center space-x-2">
+                          <Mail className="w-4 h-4 text-gray-400" />
+                          <span className="text-gray-600">tenant@example.com</span>
+                        </div>
+                      </div>
+                    );
+                  })()}
                 </div>
               </div>
             ) : (
@@ -206,7 +281,19 @@ const SpaceDragDropModal: React.FC<SpaceDragDropModalProps> = ({
           <div className="space-y-4">
             {space.paymentStatus ? (
               <div>
-                <h4 className="font-medium text-gray-900 mb-3">ສະຖານະການຊຳລະ</h4>
+                <div className="flex items-center justify-between mb-3">
+                  <h4 className="font-medium text-gray-900">ສະຖານະການຊຳລະ</h4>
+                  {/* Add payment button for rented spaces with pending payments */}
+                  {space.status === 'rented' && space.currentTenantId && getSpacePayments().length > 0 && (
+                    <button
+                      onClick={handleCollectPayment}
+                      className="flex items-center space-x-2 px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors text-sm font-medium"
+                    >
+                      <CreditCard className="w-4 h-4" />
+                      <span>ເກັບເງິນ</span>
+                    </button>
+                  )}
+                </div>
                 
                 <div className="bg-gray-50 border border-gray-200 rounded-lg p-4">
                   <div className="flex items-center justify-between mb-3">
@@ -244,6 +331,25 @@ const SpaceDragDropModal: React.FC<SpaceDragDropModalProps> = ({
                       <p className="font-medium text-gray-900">
                         {space.paymentStatus.nextDueDate.toLocaleDateString('lo-LA')}
                       </p>
+                    </div>
+                  )}
+
+                  {/* Show pending payments */}
+                  {getSpacePayments().length > 0 && (
+                    <div className="mt-4 pt-4 border-t border-gray-200">
+                      <label className="text-sm text-gray-500 mb-2 block">ການຊຳລະທີ່ຄ້າງຊຳລະ</label>
+                      <div className="space-y-2">
+                        {getSpacePayments().map((payment, index) => (
+                          <div key={payment.id} className="flex items-center justify-between text-sm bg-white p-2 rounded border">
+                            <span>{payment.paymentPeriod} - {payment.paymentFrequency}</span>
+                            <span className={`font-medium ${
+                              payment.paymentStatus === 'overdue' ? 'text-red-600' : 'text-yellow-600'
+                            }`}>
+                              {formatCurrency(payment.amountDue + (payment.lateFee || 0))}
+                            </span>
+                          </div>
+                        ))}
+                      </div>
                     </div>
                   )}
                 </div>
@@ -291,98 +397,112 @@ const SpaceDragDropModal: React.FC<SpaceDragDropModalProps> = ({
   };
 
   return (
-    <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
-      <div className="bg-white rounded-xl shadow-2xl max-w-4xl w-full max-h-[90vh] overflow-hidden">
-        {/* Header */}
-        <div className="flex items-center justify-between p-6 border-b border-gray-200 bg-gradient-to-r from-blue-50 to-indigo-50">
-          <div className="flex items-center space-x-3">
-            <div className="w-12 h-12 bg-blue-100 rounded-lg flex items-center justify-center">
-              <Building2 className="w-6 h-6 text-blue-600" />
-            </div>
-            <div>
-              <h2 className="text-xl font-bold text-gray-900">{space.spaceCode}</h2>
-              <p className="text-sm text-gray-600">{getSpaceTypeLabel(space.spaceType)}</p>
-            </div>
-          </div>
-          
-          <div className="flex items-center space-x-3">
-            {onEdit && (
-              <button
-                onClick={() => onEdit(space)}
-                className="flex items-center space-x-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
-              >
-                <Edit3 className="w-4 h-4" />
-                <span>ແກ້ໄຂ</span>
-              </button>
-            )}
-            <button
-              onClick={onClose}
-              className="p-2 hover:bg-gray-100 rounded-lg transition-colors"
-            >
-              <X className="w-5 h-5 text-gray-500" />
-            </button>
-          </div>
-        </div>
-
-        {/* Tabs */}
-        <div className="border-b border-gray-200">
-          <nav className="flex space-x-8 px-6">
-            {tabs.map((tab) => {
-              const Icon = tab.icon;
-              const isActive = activeTab === tab.id;
-              return (
-                <button
-                  key={tab.id}
-                  onClick={() => setActiveTab(tab.id as any)}
-                  className={`flex items-center space-x-2 py-4 border-b-2 font-medium text-sm transition-colors ${
-                    isActive
-                      ? 'border-blue-500 text-blue-600'
-                      : 'border-transparent text-gray-500 hover:text-gray-700'
-                  }`}
-                >
-                  <Icon className="w-4 h-4" />
-                  <span>{tab.label}</span>
-                </button>
-              );
-            })}
-          </nav>
-        </div>
-
-        {/* Content */}
-        <div className="p-6 overflow-y-auto max-h-96">
-          {renderTabContent()}
-        </div>
-
-        {/* Footer Actions */}
-        {onStatusChange && (
-          <div className="border-t border-gray-200 p-6 bg-gray-50">
-            <div className="flex items-center justify-between">
+    <>
+      <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+        <div className="bg-white rounded-xl shadow-2xl max-w-4xl w-full max-h-[90vh] overflow-hidden">
+          {/* Header */}
+          <div className="flex items-center justify-between p-6 border-b border-gray-200 bg-gradient-to-r from-blue-50 to-indigo-50">
+            <div className="flex items-center space-x-3">
+              <div className="w-12 h-12 bg-blue-100 rounded-lg flex items-center justify-center">
+                <Building2 className="w-6 h-6 text-blue-600" />
+              </div>
               <div>
-                <label className="text-sm font-medium text-gray-700">ປ່ຽນສະຖານະ:</label>
-                <select
-                  value={space.status}
-                  onChange={(e) => onStatusChange(space.id, e.target.value as Space['status'])}
-                  className="ml-3 px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                >
-                  <option value="ວ່າງ">ວ່າງ (Vacant)</option>
-                  <option value="ເຊົ່າແລ້ວ">ເຊົ່າແລ້ວ (Rented)</option>
-                  <option value="ຊ່ອມແຊມ">ຊ່ອມແຊມ (Maintenance)</option>
-                </select>
-              </div>
-              
-              <div className="flex space-x-3">
-                <button
-                  onClick={onClose}
-                  className="px-4 py-2 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 transition-colors"
-                >
-                  ປິດ
-                </button>
+                <h2 className="text-xl font-bold text-gray-900">{space.spaceCode}</h2>
+                <p className="text-sm text-gray-600">{getSpaceTypeLabel(space.spaceType)}</p>
               </div>
             </div>
+            
+            <div className="flex items-center space-x-3">
+              {onEdit && (
+                <button
+                  onClick={() => onEdit(space)}
+                  className="flex items-center space-x-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
+                >
+                  <Edit3 className="w-4 h-4" />
+                  <span>ແກ້ໄຂ</span>
+                </button>
+              )}
+              <button
+                onClick={onClose}
+                className="p-2 hover:bg-gray-100 rounded-lg transition-colors"
+              >
+                <X className="w-5 h-5 text-gray-500" />
+              </button>
+            </div>
           </div>
-        )}
+
+          {/* Tabs */}
+          <div className="border-b border-gray-200">
+            <nav className="flex space-x-8 px-6">
+              {tabs.map((tab) => {
+                const Icon = tab.icon;
+                const isActive = activeTab === tab.id;
+                return (
+                  <button
+                    key={tab.id}
+                    onClick={() => setActiveTab(tab.id as any)}
+                    className={`flex items-center space-x-2 py-4 border-b-2 font-medium text-sm transition-colors ${
+                      isActive
+                        ? 'border-blue-500 text-blue-600'
+                        : 'border-transparent text-gray-500 hover:text-gray-700'
+                    }`}
+                  >
+                    <Icon className="w-4 h-4" />
+                    <span>{tab.label}</span>
+                  </button>
+                );
+              })}
+            </nav>
+          </div>
+
+          {/* Content */}
+          <div className="p-6 overflow-y-auto max-h-96">
+            {renderTabContent()}
+          </div>
+
+          {/* Footer Actions */}
+          {onStatusChange && (
+            <div className="border-t border-gray-200 p-6 bg-gray-50">
+              <div className="flex items-center justify-between">
+                <div>
+                  <label className="text-sm font-medium text-gray-700">ປ່ຽນສະຖານະ:</label>
+                  <select
+                    value={space.status}
+                    onChange={(e) => onStatusChange(space.id, e.target.value as Space['status'])}
+                    className="ml-3 px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                  >
+                    <option value="vacant">ວ່າງ (Vacant)</option>
+                    <option value="rented">ເຊົ່າແລ້ວ (Rented)</option>
+                    <option value="maintainance">ຊ່ອມແຊມ (Maintenance)</option>
+                  </select>
+                </div>
+                
+                <div className="flex space-x-3">
+                  <button
+                    onClick={onClose}
+                    className="px-4 py-2 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 transition-colors"
+                  >
+                    ປິດ
+                  </button>
+                </div>
+              </div>
+            </div>
+          )}
+        </div>
       </div>
-    </div>
+
+      {/* Payment Modal */}
+      {selectedPayment && (
+        <PaymentModal
+          isOpen={isPaymentModalOpen}
+          payment={selectedPayment}
+          spaces={[space]} // Pass current space
+          tenants={tenants}
+          onClose={handlePaymentModalClose}
+          onSubmit={handlePaymentSubmit}
+        />
+      )}
+    </>
   );
 };
 

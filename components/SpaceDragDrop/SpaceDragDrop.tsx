@@ -100,7 +100,7 @@ const SpaceLayoutDashboard: React.FC = () => {
   const [selectedSpace, setSelectedSpace] = useState<Space | null>(null);
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [isEditMode, setIsEditMode] = useState(false);
-  const { spaces, updateSpace, loading } = useData();
+  const { spaces, updateSpace, payments, tenants, updatePayment, generateReceiptNumber, loading } = useData();
   const { width: CANVAS_WIDTH, height: CANVAS_HEIGHT } = useResponsiveCanvas();
 
   // Modal handlers
@@ -132,6 +132,16 @@ const SpaceLayoutDashboard: React.FC = () => {
       console.error('Failed to update space status:', error);
     }
   };
+
+  const handlePaymentCollected = async (paymentData: any) => {
+  try {
+    // Handle payment collection logic here
+    console.log('Payment collected:', paymentData);
+    // You might want to refresh data or show a success message
+  } catch (error) {
+    console.error('Failed to process payment:', error);
+  }
+};
 
   if (loading) {
     return (
@@ -265,6 +275,35 @@ const SpaceLayoutDashboard: React.FC = () => {
         </div>
       </div>
 
+      {/* Payment Status Legend */}
+<div className="bg-white border-b border-gray-200 px-6 py-3">
+  <div className="flex items-center justify-between">
+    <div className="flex items-center space-x-6 text-sm">
+      <span className="text-gray-600 font-medium">Payment Status:</span>
+      <div className="flex items-center space-x-1">
+        <div className="w-3 h-3 bg-green-500 rounded-full"></div>
+        <span className="text-gray-700">Paid</span>
+      </div>
+      <div className="flex items-center space-x-1">
+        <div className="w-3 h-3 bg-yellow-500 rounded-full"></div>
+        <span className="text-gray-700">Pending</span>
+      </div>
+      <div className="flex items-center space-x-1">
+        <div className="w-3 h-3 bg-red-500 rounded-full"></div>
+        <span className="text-gray-700">Overdue</span>
+      </div>
+      <div className="flex items-center space-x-1">
+        <div className="w-3 h-3 bg-gray-400 rounded-full"></div>
+        <span className="text-gray-700">Vacant</span>
+      </div>
+      <div className="flex items-center space-x-1">
+        <div className="w-3 h-3 bg-orange-500 rounded-full"></div>
+        <span className="text-gray-700">Maintenance</span>
+      </div>
+    </div>
+  </div>
+</div>
+
       {/* Edit Mode Indicator */}
       {isEditMode && (
         <div className="bg-yellow-50 border-b border-yellow-200 px-6 py-2">
@@ -336,6 +375,9 @@ const SpaceLayoutDashboard: React.FC = () => {
         space={selectedSpace}
         onEdit={handleEditSpace}
         onStatusChange={handleStatusChange}
+        payments={payments}
+  tenants={tenants}
+  onPaymentCollected={handlePaymentCollected}
       />
     </div>
   );
@@ -545,9 +587,28 @@ const SpaceItem: React.FC<SpaceItemProps> = ({
   onClick, 
   isEditMode = false 
 }) => {
-  const statusColor = space.status === 'vacant' ? 'bg-green-500' 
-    : space.status === 'rented' ? 'bg-blue-500'
-    : space.status === 'maintainance' ? 'bg-orange-500' : 'bg-gray-500';
+  const getPaymentStatusColor = (space: Space): string => {
+  // If no tenant, use gray
+  if (space.status === 'vacant' || !space.currentTenantId) {
+    return 'bg-gray-400';
+  }
+  
+  // If maintenance, use orange regardless of payment status
+  if (space.status === 'maintainance') {
+    return 'bg-orange-500';
+  }
+  
+  // Use payment status for occupied spaces
+  const paymentStatus = space.paymentStatus?.currentStatus;
+  switch (paymentStatus) {
+    case 'paid': return 'bg-green-500';      // Green = paid
+    case 'pending': return 'bg-yellow-500';   // Yellow = pending  
+    case 'overdue': return 'bg-red-500';      // Red = overdue
+    default: return 'bg-blue-500';            // Blue = unknown/default
+  }
+};
+
+const statusColor = getPaymentStatusColor(space);
 
   const getPaymentIcon = (): React.ReactNode => {
     const status = space.paymentStatus?.currentStatus;

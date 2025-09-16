@@ -25,6 +25,7 @@ import ReceiptModal from "./ReceiptModal";
 const PaymentCollection: React.FC = () => {
   const { 
     payments, 
+    paidPayments,
     spaces, 
     tenants, 
     updatePayment, 
@@ -102,43 +103,43 @@ const getDaysOverdue = (payment: Payment) => {
 
   // Time-based filtering
   const getTimeFilteredPayments = () => {
-    const today = new Date();
-    const todayStart = new Date(today.getFullYear(), today.getMonth(), today.getDate());
-    const futureStart = new Date(todayStart);
-    futureStart.setDate(futureStart.getDate() + 1);
+  const today = new Date();
+  const todayStart = new Date(today.getFullYear(), today.getMonth(), today.getDate());
+  const futureStart = new Date(todayStart);
+  futureStart.setDate(futureStart.getDate() + 1);
 
-    switch (activeTimeTab) {
-      case "overdue":
-    return payments.filter(payment => {
-      const today = new Date();
-      const todayStart = new Date(today.getFullYear(), today.getMonth(), today.getDate());
-      const dueDate = new Date(payment.dueDate);
-      return payment.status !== 'paid' && dueDate < todayStart;
-    });
-  case "current":
-    return payments.filter(payment => {
-      const today = new Date();
-      const todayStart = new Date(today.getFullYear(), today.getMonth(), today.getDate());
-      const todayEnd = new Date(todayStart);
-      todayEnd.setDate(todayEnd.getDate() + 1);
-      const dueDate = new Date(payment.dueDate);
-      return payment.status !== 'paid' && dueDate >= todayStart && dueDate < todayEnd;
-    });
-  case "future":
-    return payments.filter(payment => {
-      const today = new Date();
-      const todayStart = new Date(today.getFullYear(), today.getMonth(), today.getDate());
-      const todayEnd = new Date(todayStart);
-      todayEnd.setDate(todayEnd.getDate() + 1);
-      const dueDate = new Date(payment.dueDate);
-      return payment.status !== 'paid' && dueDate >= todayEnd;
-    });
-      case "history":
-        return payments.filter(payment => payment.status === 'paid');
-      default:
-        return payments;
-    }
-  };
+  switch (activeTimeTab) {
+    case "overdue":
+      return payments.filter(payment => {
+        const today = new Date();
+        const todayStart = new Date(today.getFullYear(), today.getMonth(), today.getDate());
+        const dueDate = new Date(payment.dueDate);
+        return payment.status !== 'paid' && dueDate < todayStart;
+      });
+    case "current":
+      return payments.filter(payment => {
+        const today = new Date();
+        const todayStart = new Date(today.getFullYear(), today.getMonth(), today.getDate());
+        const todayEnd = new Date(todayStart);
+        todayEnd.setDate(todayEnd.getDate() + 1);
+        const dueDate = new Date(payment.dueDate);
+        return payment.status !== 'paid' && dueDate >= todayStart && dueDate < todayEnd;
+      });
+    case "future":
+      return payments.filter(payment => {
+        const today = new Date();
+        const todayStart = new Date(today.getFullYear(), today.getMonth(), today.getDate());
+        const todayEnd = new Date(todayStart);
+        todayEnd.setDate(todayEnd.getDate() + 1);
+        const dueDate = new Date(payment.dueDate);
+        return payment.status !== 'paid' && dueDate >= todayEnd;
+      });
+    case "history":
+      return paidPayments; // CHANGED: Use paidPayments instead of filtering payments
+    default:
+      return payments;
+  }
+};
 
   // Filter payments based on all filters
   const getFilteredPayments = () => {
@@ -405,10 +406,10 @@ const getStatusText = (payment: Payment) => {
     }).length 
   },
     { 
-      id: "history", 
-      label: "ປະຫວັດ", 
-      count: payments.filter(p => p.status === 'paid').length 
-    },
+    id: "history", 
+    label: "ປະຫວັດ", 
+    count: paidPayments.length // CHANGED: Use paidPayments.length instead of filtering
+  },
   ];
 
   // Frequency tabs

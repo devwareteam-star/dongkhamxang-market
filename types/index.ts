@@ -124,6 +124,13 @@ export interface Payment {
   paymentType: 'daily' | 'monthly' | 'yearly'; // Alias for paymentFrequency
 }
 
+// In types/index.ts - if you want a specific type
+interface PaidPayment extends Payment {
+  originalPaymentId: string;
+  movedToPaidAt: Date;
+  movedBy?: string;
+}
+
 
 
 export interface Bill {
