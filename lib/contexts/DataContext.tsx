@@ -108,8 +108,10 @@ interface DataContextType {
   updateSettings: (settings: Partial<SystemSettings>) => void;
 }
 
+// Create magic backpack 
 const DataContext = createContext<DataContextType | undefined>(undefined);
 
+// Rulebook of school, ex: class at 8am, lunch $5
 const defaultSettings: SystemSettings = {
   marketInfo: {
     name: "ຕະຫຼາດດົງຄໍາຊ້າງ",
@@ -161,6 +163,7 @@ const defaultSettings: SystemSettings = {
   },
 };
 
+// Component wrapper, a magic backpack supplier make sure everyone access tools in this backpack
 export const DataProvider: React.FC<{ children: React.ReactNode }> = ({
   children,
 }) => {
@@ -180,7 +183,7 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({
     loadData();
   }, []);
 
-  // Utility function to convert Firebase Timestamps
+  // Utility function to convert Firebase Timestamps, ex: it's like translate firebase(foreign language) to readable English Langauge
   const convertTimestamps = (obj: any) => {
     const converted = { ...obj };
     Object.keys(converted).forEach((key) => {
@@ -209,7 +212,8 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({
   //   return mapping[laoStatus] || "pending";
   // };
 
-  const inferPaymentType = (
+  // Legacy. Guess the  paymentFrequency, 1. find tenant, 2. find spaces, 3. calculate monthly rent & final guess from calculated amount
+ const inferPaymentType = (
     payment: any,
     tenantsList: Tenant[],
     spacesList: Space[]
@@ -238,8 +242,9 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({
     if (ratio >= 12) return "yearly"; // 12x monthly = yearly
     if (ratio <= 0.5) return "daily"; // Less than half monthly = daily
     return "monthly"; // Default to monthly
-  };
+  }; 
 
+  // This function check the old data fields and new data fields to make it match even tho the system changed or updated in the future
   const enhancePaymentWithLegacyFields = (
     payment: any,
     tenantsList: Tenant[],
@@ -260,7 +265,7 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({
     };
   };
 
-  // Add function to load paid payments
+  // Add function to load paid payments. this function is like take someone to get paidPayments in storage room and put it in magic backpack
 const loadPaidPayments = async () => {
   try {
     const paidData = await paidCollectionService.getAll();
@@ -275,12 +280,14 @@ const loadPaidPayments = async () => {
   }
 };
 
-  // Load data function
+  // *Load data function, is like the grand opening day of school when you need to get ALL the supplies from different storage rooms and set up everything before students arrive!
   const loadData = async () => {
     try {
       setLoading(true);
       console.log("Loading data from Firebase...");
 
+
+      // send 6 people to get data from firebase
       const [
         spacesData,
         tenantsData,
@@ -355,10 +362,7 @@ if (enhancedPayments.length > 0) {
     }
   };
 
-  // Payment generation functions
-  // Enhanced Payment Generation Functions - Hybrid Approach
-  // Combines frequency-specific periods, smarter duplicate detection, and due date-based logic
-
+  // **Payment generation functions, 1. check tenant, 2. check space, 3. Checks what bills already exist (to avoid duplicates), 4. Calculates when the next bill is due & 5. Creates new bills for each space they rent
   const generatePaymentsForTenant = async (
   tenantBusinessId: string,
   paymentFrequency?: "daily" | "monthly" | "yearly",
@@ -668,7 +672,7 @@ if (enhancedPayments.length > 0) {
   }
 };
 
-  // Enhanced utility function to clean up duplicate payments (run once to fix existing data)
+  // *Enhanced utility function to clean up duplicate payments (run once to fix existing data), Step 1: Group similar payments together, Step 2: Find groups with duplicates, Step 3: Keep the oldest, delete the rest
   const cleanupDuplicatePayments = async () => {
     console.log("Starting duplicate payment cleanup...");
 
@@ -717,6 +721,7 @@ if (enhancedPayments.length > 0) {
     );
   };
 
+  // Step 1: Prepare the data for the "finished" cabinet, Step 2: Put it in the "finished work" cabinet,  Step 3: Remove from "to-do" cabinet & Step 4: Update your memory immediately
 const movePaymentToPaidCollection = async (payment: Payment, updatedData: Partial<Payment>) => {
   try {
     const paidPaymentData = {
@@ -750,8 +755,7 @@ const movePaymentToPaidCollection = async (payment: Payment, updatedData: Partia
   }
 };
 
-  // NEW: Daily late fee processing function
-  // Debug version of processLateFees function - CORRECTED
+  // Debug version of processLateFees function - CORRECTED, Step 1: Check if late fees are even turned on, Step 2: Find overdue payments & Step 3: Process each overdue payment For each overdue payment.
 const processLateFees = async (paymentsToProcess = payments) => {
   console.log("🔍 DEBUG: Total payments in array:", paymentsToProcess.length);
   console.log("🔍 DEBUG: Sample payment dates:", paymentsToProcess.slice(0, 2).map(p => ({
@@ -948,8 +952,7 @@ const processLateFees = async (paymentsToProcess = payments) => {
   }
 };
 
-  
-
+// Step 1: Find all active tenants& Step 2: Generate payments for each tenant one by one
   const generatePaymentsForAllTenants = async (
     paymentFrequency: "daily" | "monthly" | "yearly",
     dueDate: Date = new Date()
@@ -976,7 +979,7 @@ const processLateFees = async (paymentsToProcess = payments) => {
     }
   };
 
-  // Space operations
+  // Space operations. Step 1: Check for duplicates, Step 2: Create in database & Step 3: Update local memory for real-time website display
   const addSpace = async (
     spaceData: Omit<
       Space,
@@ -1004,6 +1007,7 @@ const processLateFees = async (paymentsToProcess = payments) => {
     }
   };
 
+  // Step 1: Check if space exists, Step 2: Update database first & Step 3: Update local memory
   const updateSpace = async (id: string, spaceUpdate: Partial<Space>) => {
     try {
       const existingSpace = spaces.find((s) => s.id === id);
@@ -1028,6 +1032,7 @@ const processLateFees = async (paymentsToProcess = payments) => {
     }
   };
 
+  // Delete space
   const deleteSpace = async (id: string) => {
     try {
       await spacesService.delete(id);
@@ -1039,7 +1044,7 @@ const processLateFees = async (paymentsToProcess = payments) => {
     }
   };
 
-  // Tenant operations
+  // Tenant operations. Step 1: Check for space conflicts, Step 2: Create the tenant record, Step 3: Update local memory & Step 4: Mark spaces as occupied
   const addTenant = async (
     tenantData: Omit<Tenant, "tenantId" | "createdAt" | "createdBy">
   ) => {
@@ -1151,6 +1156,7 @@ const processLateFees = async (paymentsToProcess = payments) => {
     }
   };
 
+  //  Step 1: Calculate space changes, Step 2: Check conflicts for new spaces Makes sure the new classrooms aren't already occupied by other students., Step 3: Remove tenant from old spaces, Step 4: Add tenant to new spaces Put the student's name on their new classroom doors. & Step 5: Update the tenant record Save the changes to the student's main record.
   const updateTenant = async (id: string, tenantUpdate: Partial<Tenant>) => {
     try {
       const existingTenant = tenants.find((t) => t.id === id);
@@ -1283,6 +1289,7 @@ const processLateFees = async (paymentsToProcess = payments) => {
     }
   };
 
+  // Step 1: Find the tenant, Step 2: Free up all their spaces & Step 3: Delete the tenant record
   const deleteTenant = async (tenantId: string) => {
     try {
       console.log("🔍 Looking for tenant with ID:", tenantId);
@@ -1351,7 +1358,7 @@ const processLateFees = async (paymentsToProcess = payments) => {
     }
   };
 
-  // Payment operations nice nice
+  // Payment operations nice nice, Step 1: Clean up the data(Remove the old-style field names that Firebase doesn't need.), Step 2: Create in database, Step 3: Add compatibility fields back & Step 4: Update local memory
   const addPayment = async (
     paymentData: Omit<Payment, "paymentId" | "createdAt" | "updatedAt">
   ) => {
@@ -1382,6 +1389,7 @@ const processLateFees = async (paymentsToProcess = payments) => {
     }
   };
 
+  // This function is like a bank teller who needs to update a bill, but has special handling when someone actually pays it. Step 1: Find the payment, Step 2: Check if marking as paid & Step 3A: If paid - move to different collection || Step 3B: If not paid - regular update Strip legacy fields, map field names, update database, update local state.
 const updatePayment = async (id: string, paymentUpdate: Partial<Payment>) => {
   try {
     // Find the current payment first
@@ -1451,6 +1459,7 @@ const updatePayment = async (id: string, paymentUpdate: Partial<Payment>) => {
   }
 };
 
+// Delete payments
   const deletePayment = async (id: string) => {
     try {
       await paymentsService.delete(id);
@@ -1866,6 +1875,7 @@ const updatePayment = async (id: string, paymentUpdate: Partial<Payment>) => {
     }
   };
 
+  // the "magic backpack" being filled with all the supplies and tools that components can access.
   return (
     <DataContext.Provider
       value={{
