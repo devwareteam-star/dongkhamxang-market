@@ -185,32 +185,18 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({
 
   // Utility function to convert Firebase Timestamps, ex: it's like translate firebase(foreign language) to readable English Langauge
   const convertTimestamps = (obj: any) => {
-    const converted = { ...obj };
-    Object.keys(converted).forEach((key) => {
-      if (
-        converted[key] &&
-        typeof converted[key] === "object" &&
-        converted[key].toDate
+    const converted = { ...obj };           // 1. Create copy
+    Object.keys(converted).forEach((key) => {  // 2. Iterate properties
+      if (                                  // 3. Check conditions
+        converted[key] &&                   // Not null/undefined
+        typeof converted[key] === "object" &&  // Is object
+        converted[key].toDate               // Has toDate method
       ) {
-        converted[key] = converted[key].toDate();
+        converted[key] = converted[key].toDate();  // 4. Convert
       }
     });
-    return converted;
+    return converted;                       // 5. Return modified copy
   };
-
-  // Helper functions for payment processing
-  // const mapPaymentStatusToEnglish = (
-  //   laoStatus: string
-  // ): "pending" | "paid" | "overdue" | "partial" => {
-  //   const mapping: Record<string, "pending" | "paid" | "overdue" | "partial"> =
-  //     {
-  //       ລໍຖ້າ: "pending",
-  //       ຈ່າຍແລ້ວ: "paid",
-  //       ເກີນກຳນົດ: "overdue",
-  //       ຈ່າຍບາງສ່ວນ: "partial",
-  //     };
-  //   return mapping[laoStatus] || "pending";
-  // };
 
   // Legacy. Guess the  paymentFrequency, 1. find tenant, 2. find spaces, 3. calculate monthly rent & final guess from calculated amount
  const inferPaymentType = (
@@ -323,14 +309,6 @@ const loadPaidPayments = async () => {
           )
         );
       setPayments(enhancedPayments as Payment[]);
-
-      // In loadData function, replace the setTimeout with:
-// const enhancedPayments = paymentsData
-//   .map(convertTimestamps)
-//   .map((payment) =>
-//     enhancePaymentWithLegacyFields(payment, processedTenants, processedSpaces)
-//   );
-// setPayments(enhancedPayments as Payment[]);
 
 // Process late fees AFTER setting payments
 if (enhancedPayments.length > 0) {
