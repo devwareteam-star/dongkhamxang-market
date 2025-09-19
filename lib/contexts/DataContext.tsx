@@ -374,263 +374,214 @@ if (enhancedPayments.length > 0) {
     );
 
     // Generate individual payment for each space
-    for (const space of tenantSpaces) {
-      const frequency = space.paymentFrequency || "monthly";
+// Generate individual payment for each space
+for (const space of tenantSpaces) {
+  const frequency = space.paymentFrequency || "monthly";
 
-      // Skip if specific frequency requested and doesn't match
-      if (paymentFrequency && frequency !== paymentFrequency) {
-        console.log(
-          `⏭️  Skipping space ${space.spaceCode} - frequency mismatch (${frequency} vs ${paymentFrequency})`
-        );
-        continue;
-      }
+  // Skip if specific frequency requested and doesn't match
+  if (paymentFrequency && frequency !== paymentFrequency) {
+    console.log(
+      `⏭️  Skipping space ${space.spaceCode} - frequency mismatch (${frequency} vs ${paymentFrequency})`
+    );
+    continue;
+  }
 
-      // ENHANCED APPROACH 1: Check both payments and paidPayments collections for duplicates
-      const hasExistingPayment = [...payments, ...paidPayments].some((p) => {
-        if (
-          p.spaceId !== space.id ||
-          p.tenantId !== tenantBusinessId
-        ) {
-          return false;
-        }
+  // STEP 1: Calculate next due date and period FIRST
+  const lastPaidPayment = [...payments, ...paidPayments]
+    .filter(
+      (p) =>
+        p.spaceId === space.id &&
+        p.tenantId === tenantBusinessId &&
+        p.paymentStatus === "paid" &&
+        p.paymentFrequency === frequency
+    )
+    .sort(
+      (a, b) => 
+        new Date(b.dueDate || b.paymentDate).getTime() -
+        new Date(a.dueDate || a.paymentDate).getTime()
+    )[0];
 
-        // For unpaid payments, check all statuses except paid
-        // For paid payments, they're all paid by definition
-        const isUnpaidPayment = payments.includes(p) && p.paymentStatus !== "paid";
-        const isPaidPayment = paidPayments.includes(p);
+  let nextDueDate = new Date(dueDate);
+  let calculatedPeriod = "";
+
+  if (lastPaidPayment) {
+    // Calculate from last paid payment's due date
+    const lastDueDate = new Date(
+      lastPaidPayment.dueDate || lastPaidPayment.paymentDate
+    );
+
+    switch (frequency) {
+      case "daily":
+        nextDueDate = new Date(lastDueDate);
+        nextDueDate.setDate(nextDueDate.getDate() + 1);
+        calculatedPeriod = `${nextDueDate.getFullYear()}-${String(
+          nextDueDate.getMonth() + 1
+        ).padStart(2, "0")}-${String(nextDueDate.getDate()).padStart(2, "0")}`;
+        break;
         
-        // Skip if it's an unpaid payment that's already paid (shouldn't happen but safety check)
-        if (!isUnpaidPayment && !isPaidPayment) {
-          return false;
-        }
+      case "monthly":
+        nextDueDate = new Date(lastDueDate);
+        nextDueDate.setDate(nextDueDate.getDate() + 30);
+        calculatedPeriod = `${nextDueDate.getFullYear()}-${String(
+          nextDueDate.getMonth() + 1
+        ).padStart(2, "0")}`;
+        break;
+        
+      case "yearly":
+        nextDueDate = new Date(lastDueDate);
+        nextDueDate.setDate(nextDueDate.getDate() + 365);
+        calculatedPeriod = nextDueDate.getFullYear().toString();
+        break;
+    }
+  } else {
+    // First payment - use provided dueDate
+    switch (frequency) {
+      case "daily":
+        nextDueDate = new Date(dueDate);
+        calculatedPeriod = `${nextDueDate.getFullYear()}-${String(
+          nextDueDate.getMonth() + 1
+        ).padStart(2, "0")}-${String(nextDueDate.getDate()).padStart(2, "0")}`;
+        break;
 
-        // Frequency-specific duplicate detection
-        switch (frequency) {
-          case "yearly":
-            return (
-              p.paymentPeriod?.startsWith(currentYear) &&
-              p.paymentFrequency === "yearly"
-            );
-          case "monthly":
-            return (
-              p.paymentPeriod === currentMonth &&
-              p.paymentFrequency === "monthly"
-            );
-          case "daily":
-            return (
-              p.paymentPeriod === currentDay && 
-              p.paymentFrequency === "daily"
-            );
-          default:
-            return false;
-        }
+      case "monthly":
+        nextDueDate = new Date(dueDate);
+        calculatedPeriod = `${nextDueDate.getFullYear()}-${String(
+          nextDueDate.getMonth() + 1
+        ).padStart(2, "0")}`;
+        break;
+
+      case "yearly":
+        nextDueDate = new Date(dueDate);
+        calculatedPeriod = nextDueDate.getFullYear().toString();
+        break;
+    }
+  }
+
+  console.log(`🔍 Checking for period: ${calculatedPeriod}, frequency: ${frequency}`);
+
+  // STEP 2: Now check for duplicates using the CALCULATED period
+  const hasExistingPayment = [...payments, ...paidPayments].some((p) => {
+    if (p.spaceId !== space.id || p.tenantId !== tenantBusinessId) {
+      return false;
+    }
+
+    // Check if payment exists for the CALCULATED period (not current period)
+    const isDuplicate = p.paymentPeriod === calculatedPeriod && p.paymentFrequency === frequency;
+    
+    if (isDuplicate) {
+      console.log(`🔍 Found existing payment:`, {
+        paymentId: p.paymentId || p.id,
+        period: p.paymentPeriod,
+        status: p.paymentStatus,
+        collection: payments.includes(p) ? 'payments' : 'paidPayments'
       });
+    }
+    
+    return isDuplicate;
+  });
 
-      if (hasExistingPayment) {
-        console.log(
-          `⏭️  Skipping space ${space.spaceCode} - payment already exists for current period (paid or unpaid)`
-        );
-        continue;
-      }
+  if (hasExistingPayment) {
+    console.log(
+      `⏭️  Skipping space ${space.spaceCode} - payment already exists for period ${calculatedPeriod}`
+    );
+    continue;
+  }
 
-      // ENHANCED APPROACH 2: Find last payment from both collections for proper sequencing
-      const lastPaidPayment = [...payments, ...paidPayments]
-        .filter(
-          (p) =>
-            p.spaceId === space.id &&
-            p.tenantId === tenantBusinessId &&
-            p.paymentStatus === "paid" &&
-            p.paymentFrequency === frequency // Only consider payments of same frequency
-        )
-        .sort(
-          (a, b) => 
-            new Date(b.dueDate || b.paymentDate).getTime() -
-            new Date(a.dueDate || a.paymentDate).getTime()
-        )[0];
+  // Validate that the calculated due date makes sense
+  const todayTime = new Date().getTime();
+  const calculatedTime = nextDueDate.getTime();
 
-      // Calculate next due date based on frequency and last payment
-      let nextDueDate = new Date(dueDate);
-      let calculatedPeriod = "";
+  // Skip if due date is in the past (shouldn't happen with proper logic)
+  if (calculatedTime < todayTime - 24 * 60 * 60 * 1000) {
+    console.log(
+      `⚠️  Skipping space ${space.spaceCode} - calculated due date is too far in the past: ${nextDueDate.toLocaleDateString()}`
+    );
+    continue;
+  }
 
-      if (lastPaidPayment) {
-        // Calculate from last paid payment's due date
-        const lastDueDate = new Date(
-          lastPaidPayment.dueDate || lastPaidPayment.paymentDate
-        );
+  // Calculate amount based on frequency
+  let amountDue = 0;
+  switch (frequency) {
+    case "yearly":
+      amountDue = space.baseRentMonthly * 12;
+      break;
+    case "daily":
+      amountDue = Math.round(space.baseRentMonthly / 30);
+      break;
+    case "monthly":
+    default:
+      amountDue = space.baseRentMonthly;
+      break;
+  }
 
-        switch (frequency) {
-          case "daily":
-            nextDueDate = new Date(lastDueDate);
-            nextDueDate.setDate(nextDueDate.getDate() + 1);
-            calculatedPeriod = `${nextDueDate.getFullYear()}-${String(
-              nextDueDate.getMonth() + 1
-            ).padStart(2, "0")}-${String(nextDueDate.getDate()).padStart(
-              2,
-              "0"
-            )}`;
-            break;
-            
-          case "monthly":
-            // Add exactly 30 days instead of 1 month
-            nextDueDate = new Date(lastDueDate);
-            nextDueDate.setDate(nextDueDate.getDate() + 30);
-            calculatedPeriod = `${nextDueDate.getFullYear()}-${String(
-              nextDueDate.getMonth() + 1
-            ).padStart(2, "0")}`;
-            break;
-            
-          case "yearly":
-            // Add exactly 365 days instead of 1 year
-            nextDueDate = new Date(lastDueDate);
-            nextDueDate.setDate(nextDueDate.getDate() + 365);
-            calculatedPeriod = nextDueDate.getFullYear().toString();
-            break;
-        }
-      } else {
-        // First payment - use today's date for all frequencies
-        const today = new Date();
+  // Validate amount
+  if (amountDue <= 0) {
+    console.warn(
+      `⚠️  Skipping space ${space.spaceCode} - invalid amount: ${amountDue}`
+    );
+    continue;
+  }
 
-        switch (frequency) {
-          case "daily":
-            // Daily payment should be due TOMORROW
-            nextDueDate = new Date(today);
-            nextDueDate.setDate(nextDueDate.getDate() + 1); // Add 1 day
-            calculatedPeriod = `${nextDueDate.getFullYear()}-${String(
-              nextDueDate.getMonth() + 1
-            ).padStart(2, "0")}-${String(nextDueDate.getDate()).padStart(2, "0")}`;
-            break;
+  console.log(`✨ Creating payment for space ${space.spaceCode}, period: ${calculatedPeriod}, due: ${nextDueDate.toLocaleDateString()}`);
 
-          case "monthly":
-            // Monthly payment should be due in 30 days
-            nextDueDate = new Date(today);
-            nextDueDate.setDate(nextDueDate.getDate() + 30); // Add 30 days
-            calculatedPeriod = `${nextDueDate.getFullYear()}-${String(
-              nextDueDate.getMonth() + 1
-            ).padStart(2, "0")}`;
-            break;
+  const paymentData = {
+    spaceId: space.id,
+    spaceCode: space.spaceCode,
+    tenantId: tenantBusinessId,
+    paymentPeriod: calculatedPeriod,
+    dueDate: nextDueDate,
+    originalDueDate: nextDueDate,
+    amountDue,
+    originalAmount: amountDue,
+    lateFee: 0,
+    lateFeeRate: null,
+    lateFeeApplied: false,
+    daysOverdue: 0,
+    paymentStatus: "pending" as const,
+    paymentFrequency: frequency as "daily" | "monthly" | "yearly",
+    notes: `${
+      frequency.charAt(0).toUpperCase() + frequency.slice(1)
+    } payment for space ${space.spaceCode} (${
+      space.spaceType || "Unknown type"
+    }) - Period: ${calculatedPeriod}`,
 
-          case "yearly":
-            // Yearly payment should be due in 365 days
-            nextDueDate = new Date(today);
-            nextDueDate.setDate(nextDueDate.getDate() + 365); // Add 365 days
-            calculatedPeriod = nextDueDate.getFullYear().toString();
-            break;
-        }
-      }
+    // Legacy fields for compatibility
+    id: "",
+    roomId: space.id,
+    amount: amountDue,
+    status: "pending" as const,
+    paymentType: frequency as "daily" | "monthly" | "yearly",
+  };
 
-      // Validate that the calculated due date makes sense
-      const todayTime = new Date().getTime();
-      const calculatedTime = nextDueDate.getTime();
+  try {
+    await addPayment(paymentData);
+    paymentsGenerated++;
+    console.log(
+      `✅ Generated ${frequency} payment for space ${
+        space.spaceCode
+      }: ₭${amountDue.toLocaleString()} - Due: ${nextDueDate.toLocaleDateString()} - Period: ${calculatedPeriod}`
+    );
 
-      // Skip if due date is in the past (shouldn't happen with proper logic)
-      if (calculatedTime < todayTime - 24 * 60 * 60 * 1000) {
-        // Allow 1 day buffer
-        console.log(
-          `⚠️  Skipping space ${
-            space.spaceCode
-          } - calculated due date is too far in the past: ${nextDueDate.toLocaleDateString()}`
-        );
-        continue;
-      }
-
-      // Calculate amount based on frequency
-      let amountDue = 0;
-      switch (frequency) {
-        case "yearly":
-          amountDue = space.baseRentMonthly * 12;
-          break;
-        case "daily":
-          amountDue = Math.round(space.baseRentMonthly / 30);
-          break;
-        case "monthly":
-        default:
-          amountDue = space.baseRentMonthly;
-          break;
-      }
-
-      // Validate amount
-      if (amountDue <= 0) {
-        console.warn(
-          `⚠️  Skipping space ${space.spaceCode} - invalid amount: ${amountDue}`
-        );
-        continue;
-      }
-
-      // Final duplicate check: ensure no duplicate exists with the calculated period
-      // This is a safety net in case the first check missed something
-      const finalDuplicateCheck = [...payments, ...paidPayments].some(
-        (p) =>
-          p.spaceId === space.id &&
-          p.tenantId === tenantBusinessId &&
-          p.paymentPeriod === calculatedPeriod &&
-          p.paymentFrequency === frequency
-      );
-
-      if (finalDuplicateCheck) {
-        console.log(
-          `⏭️  Final check: Skipping space ${space.spaceCode} - duplicate found for period ${calculatedPeriod}`
-        );
-        continue;
-      }
-
-      const paymentData = {
-        spaceId: space.id,
-        spaceCode: space.spaceCode,
-        tenantId: tenantBusinessId,
-        paymentPeriod: calculatedPeriod, // Use frequency-specific period format
-        dueDate: nextDueDate,
-        originalDueDate: nextDueDate,
-        amountDue,
-        originalAmount: amountDue,
+    // Update space payment status
+    await updateSpace(space.id, {
+      paymentStatus: {
+        currentStatus: "pending",
+        currentPeriodPaid: false,
+        nextDueDate: nextDueDate,
         lateFee: 0,
-        lateFeeRate: null,
         lateFeeApplied: false,
         daysOverdue: 0,
-        paymentStatus: "pending" as const,
-        paymentFrequency: frequency as "daily" | "monthly" | "yearly",
-        notes: `${
-          frequency.charAt(0).toUpperCase() + frequency.slice(1)
-        } payment for space ${space.spaceCode} (${
-          space.spaceType || "Unknown type"
-        }) - Period: ${calculatedPeriod}`,
-
-        // Legacy fields for compatibility
-        id: "",
-        roomId: space.id,
-        amount: amountDue,
-        status: "pending" as const,
-        paymentType: frequency as "daily" | "monthly" | "yearly",
-      };
-
-      try {
-        await addPayment(paymentData);
-        paymentsGenerated++;
-        console.log(
-          `✅ Generated ${frequency} payment for space ${
-            space.spaceCode
-          }: ₭${amountDue.toLocaleString()} - Due: ${nextDueDate.toLocaleDateString()} - Period: ${calculatedPeriod}`
-        );
-
-        // Update space payment status
-        await updateSpace(space.id, {
-          paymentStatus: {
-            currentStatus: "pending",
-            currentPeriodPaid: false,
-            nextDueDate: nextDueDate,
-            lateFee: 0,
-            lateFeeApplied: false,
-            daysOverdue: 0,
-            lastUpdated: new Date(),
-          },
-        });
-      } catch (paymentError) {
-        console.error(
-          `❌ Failed to generate payment for space ${space.spaceCode}:`,
-          paymentError
-        );
-        continue;
-      }
-    }
+        lastUpdated: new Date(),
+      },
+    });
+  } catch (paymentError) {
+    console.error(
+      `❌ Failed to generate payment for space ${space.spaceCode}:`,
+      paymentError
+    );
+    continue;
+  }
+}
 
     if (paymentsGenerated > 0) {
       console.log(
@@ -1387,8 +1338,149 @@ const updatePayment = async (
                            currentPayment.status !== 'paid';
 
     if (isMarkingAsPaid) {
+      // Store payment info for single space generation BEFORE moving payment
+      const tenantId = currentPayment.tenantId;
+      const paymentFrequency = currentPayment.paymentFrequency;
+      const spaceId = currentPayment.spaceId; // Get the specific space ID
+      
+      console.log(`Payment marked as paid for tenant ${tenantId}, frequency: ${paymentFrequency}, space: ${spaceId}`);
+
       // Move to paid collection instead of updating
       await movePaymentToPaidCollection(currentPayment, paymentUpdate);
+
+      // Generate next payment for THIS SPECIFIC SPACE only
+      if (tenantId && paymentFrequency && spaceId) {
+        try {
+          console.log(`Generating next ${paymentFrequency} payment for tenant ${tenantId}, space ${spaceId}...`);
+          
+          // Find the specific space
+          const space = spaces.find(s => s.id === spaceId);
+          if (!space) {
+            console.warn(`Space ${spaceId} not found, skipping payment generation`);
+            return;
+          }
+
+          // Calculate next due date based on the current payment's due date
+          const currentDueDate = new Date(currentPayment.originalDueDate || currentPayment.dueDate);
+          let nextDueDate = new Date(currentDueDate);
+          
+          // Add the appropriate period based on frequency
+          switch (paymentFrequency) {
+            case 'daily':
+              nextDueDate.setDate(nextDueDate.getDate() + 1);
+              break;
+            case 'monthly':
+              nextDueDate.setDate(nextDueDate.getDate() + 30);
+              break;
+            case 'yearly':
+              nextDueDate.setDate(nextDueDate.getDate() + 365);
+              break;
+            default:
+              // Default to monthly if frequency is unclear
+              nextDueDate.setDate(nextDueDate.getDate() + 30);
+              break;
+          }
+
+          // Calculate the period for the new payment
+          let calculatedPeriod = "";
+          switch (paymentFrequency) {
+            case "daily":
+              calculatedPeriod = `${nextDueDate.getFullYear()}-${String(
+                nextDueDate.getMonth() + 1
+              ).padStart(2, "0")}-${String(nextDueDate.getDate()).padStart(2, "0")}`;
+              break;
+            case "monthly":
+              calculatedPeriod = `${nextDueDate.getFullYear()}-${String(
+                nextDueDate.getMonth() + 1
+              ).padStart(2, "0")}`;
+              break;
+            case "yearly":
+              calculatedPeriod = nextDueDate.getFullYear().toString();
+              break;
+          }
+
+          // Check if payment already exists for this specific space and period
+          const existingPayment = [...payments, ...paidPayments].some(p => 
+            p.spaceId === spaceId && 
+            p.tenantId === tenantId && 
+            p.paymentPeriod === calculatedPeriod && 
+            p.paymentFrequency === paymentFrequency
+          );
+
+          if (existingPayment) {
+            console.log(`Payment already exists for space ${space.spaceCode}, period ${calculatedPeriod}`);
+            return;
+          }
+
+          // Calculate amount based on frequency
+          let amountDue = 0;
+          switch (paymentFrequency) {
+            case "yearly":
+              amountDue = space.baseRentMonthly * 12;
+              break;
+            case "daily":
+              amountDue = Math.round(space.baseRentMonthly / 30);
+              break;
+            case "monthly":
+            default:
+              amountDue = space.baseRentMonthly;
+              break;
+          }
+
+          // Create the new payment for this specific space
+          const paymentData = {
+            spaceId: space.id,
+            spaceCode: space.spaceCode,
+            tenantId: tenantId,
+            paymentPeriod: calculatedPeriod,
+            dueDate: nextDueDate,
+            originalDueDate: nextDueDate,
+            amountDue,
+            originalAmount: amountDue,
+            lateFee: 0,
+            lateFeeRate: null,
+            lateFeeApplied: false,
+            daysOverdue: 0,
+            paymentStatus: "pending" as const,
+            paymentFrequency: paymentFrequency as "daily" | "monthly" | "yearly",
+            notes: `${
+              paymentFrequency.charAt(0).toUpperCase() + paymentFrequency.slice(1)
+            } payment for space ${space.spaceCode} (${
+              space.spaceType || "Unknown type"
+            }) - Period: ${calculatedPeriod}`,
+
+            // Legacy fields for compatibility
+            id: "",
+            roomId: space.id,
+            amount: amountDue,
+            status: "pending" as const,
+            paymentType: paymentFrequency as "daily" | "monthly" | "yearly",
+          };
+
+          // Create the payment
+          await addPayment(paymentData);
+          
+          // Update space payment status
+          await updateSpace(space.id, {
+            paymentStatus: {
+              currentStatus: "pending",
+              currentPeriodPaid: false,
+              nextDueDate: nextDueDate,
+              lateFee: 0,
+              lateFeeApplied: false,
+              daysOverdue: 0,
+              lastUpdated: new Date(),
+            },
+          });
+
+          console.log(`✅ Successfully generated next ${paymentFrequency} payment for space ${space.spaceCode} - Due: ${nextDueDate.toLocaleDateString()}`);
+
+        } catch (generationError) {
+          console.error(`Failed to generate next payment for space ${spaceId}:`, generationError);
+          console.warn("Payment processing completed, but next payment generation failed for this space.");
+        }
+      }
+
       return; // Exit early since payment is moved, not updated
     }
 

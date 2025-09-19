@@ -387,187 +387,189 @@ const ReceiptManagement: React.FC = () => {
       <div className="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden">
         {viewMode === 'list' ? (
           /* List View */
-          <div className="overflow-x-auto">
-            <table className="w-full">
-              <thead className="bg-gray-50 border-b border-gray-200">
-                <tr>
-                  <th className="text-left py-3 px-4 font-medium text-gray-700 text-sm">ເລກໃບຮັບເງິນ</th>
-                  <th className="text-left py-3 px-4 font-medium text-gray-700 text-sm">ຫ້ອງ / ຜູ້ເຊົ່າ</th>
-                  <th className="text-left py-3 px-4 font-medium text-gray-700 text-sm">ປະເພດ</th>
-                  <th className="text-right py-3 px-4 font-medium text-gray-700 text-sm">ເງິນຕົ້ນ</th>
-                  <th className="text-right py-3 px-4 font-medium text-gray-700 text-sm">ຄ່າປັບ</th>
-                  <th className="text-right py-3 px-4 font-medium text-gray-700 text-sm">ລວມ</th>
-                  <th className="text-left py-3 px-4 font-medium text-gray-700 text-sm">ວັນທີ່</th>
-                  <th className="text-left py-3 px-4 font-medium text-gray-700 text-sm">ວິທີຈ່າຍ</th>
-                  <th className="text-center py-3 px-4 font-medium text-gray-700 text-sm">ການດຳເນີນການ</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-gray-100">
-                {filteredReceipts.map((receipt) => {
-                  const space = spaces.find(s => 
-                    s.id === receipt.spaceId || s.id === receipt.roomId
-                  );
-                  const tenant = tenants.find(t => 
-                    t.tenantId === receipt.tenantId
-                  );
-                  
-                  const originalAmount = receipt.originalAmount || receipt.amountDue || receipt.amount || 0;
-                  const lateFee = receipt.lateFee || 0;
-                  const totalAmount = originalAmount + lateFee;
+         <div className="overflow-x-auto">
+  <div className="max-h-[650px] overflow-y-auto">
+    <table className="w-full">
+      <thead className="bg-gray-50 border-b border-gray-200 sticky top-0 z-10">
+        <tr>
+          <th className="text-left py-3 px-4 font-medium text-gray-700 text-sm">ເລກໃບຮັບເງິນ</th>
+          <th className="text-left py-3 px-4 font-medium text-gray-700 text-sm">ຫ້ອງ / ຜູ້ເຊົ່າ</th>
+          <th className="text-left py-3 px-4 font-medium text-gray-700 text-sm">ປະເພດ</th>
+          <th className="text-right py-3 px-4 font-medium text-gray-700 text-sm">ເງິນຕົ້ນ</th>
+          <th className="text-right py-3 px-4 font-medium text-gray-700 text-sm">ຄ່າປັບ</th>
+          <th className="text-right py-3 px-4 font-medium text-gray-700 text-sm">ລວມ</th>
+          <th className="text-left py-3 px-4 font-medium text-gray-700 text-sm">ວັນທີ່</th>
+          <th className="text-left py-3 px-4 font-medium text-gray-700 text-sm">ວິທີຈ່າຍ</th>
+          <th className="text-center py-3 px-4 font-medium text-gray-700 text-sm">ການດຳເນີນການ</th>
+        </tr>
+      </thead>
+      <tbody className="divide-y divide-gray-100">
+        {filteredReceipts.map((receipt) => {
+          const space = spaces.find(s => 
+            s.id === receipt.spaceId || s.id === receipt.roomId
+          );
+          const tenant = tenants.find(t => 
+            t.tenantId === receipt.tenantId
+          );
+          
+          const originalAmount = receipt.originalAmount || receipt.amountDue || receipt.amount || 0;
+          const lateFee = receipt.lateFee || 0;
+          const totalAmount = originalAmount + lateFee;
 
-                  return (
-                    <tr key={receipt.id || receipt.paymentId} className="hover:bg-gray-50 transition-colors">
-                      <td className="py-3 px-4">
-                        <div className="font-medium text-gray-900">{receipt.receiptNumber}</div>
-                        <div className="text-xs text-gray-500">
-                          {receipt.paymentPeriod || 'N/A'}
-                        </div>
-                      </td>
-                      <td className="py-3 px-4">
-                        <div>
-                          <div className="font-medium text-gray-900">{space?.spaceCode || 'N/A'}</div>
-                          <div className="text-sm text-gray-600">{tenant?.tenantName || 'N/A'}</div>
-                          <div className="text-xs text-gray-500">{space?.spaceType || 'N/A'}</div>
-                        </div>
-                      </td>
-                      <td className="py-3 px-4">
-                        <span className={`px-2 py-1 text-xs font-medium rounded-full ${getFrequencyColor(receipt.paymentFrequency || receipt.paymentType)}`}>
+          return (
+            <tr key={receipt.id || receipt.paymentId} className="hover:bg-gray-50 transition-colors">
+              <td className="py-3 px-4">
+                <div className="font-medium text-gray-900">{receipt.receiptNumber}</div>
+                <div className="text-xs text-gray-500">
+                  {receipt.paymentDate ? new Date(receipt.paymentDate).toLocaleDateString('lo-LA') : 'N/A'}
+                </div>
+              </td>
+              <td className="py-3 px-4">
+                <div>
+                  <div className="font-medium text-gray-900">{space?.spaceCode || 'N/A'}</div>
+                  <div className="text-sm text-gray-600">{tenant?.tenantName || 'N/A'}</div>
+                  <div className="text-xs text-gray-500">{space?.spaceType || 'N/A'}</div>
+                </div>
+              </td>
+              <td className="py-3 px-4">
+                <span className={`px-2 py-1 text-xs font-medium rounded-full ${getFrequencyColor(receipt.paymentFrequency || receipt.paymentType)}`}>
+                  {getFrequencyText(receipt.paymentFrequency || receipt.paymentType)}
+                </span>
+              </td>
+              <td className="py-3 px-4 text-right">
+                <div className="font-medium text-gray-900">₭{originalAmount.toLocaleString()}</div>
+              </td>
+              <td className="py-3 px-4 text-right">
+                {lateFee > 0 ? (
+                  <div className="font-medium text-red-600">₭{lateFee.toLocaleString()}</div>
+                ) : (
+                  <span className="text-gray-400 text-xs">-</span>
+                )}
+              </td>
+              <td className="py-3 px-4 text-right">
+                <div className="font-bold text-green-600">₭{totalAmount.toLocaleString()}</div>
+              </td>
+              <td className="py-3 px-4 text-gray-600 text-sm">
+                {receipt.paymentDate ? new Date(receipt.paymentDate).toLocaleDateString('lo-LA') : 'N/A'}
+              </td>
+              <td className="py-3 px-4">
+                <span className={`inline-flex px-2 py-1 text-xs font-medium rounded-full ${
+                  receipt.paymentMethod === 'cash' 
+                    ? 'bg-green-100 text-green-800' 
+                    : 'bg-blue-100 text-blue-800'
+                }`}>
+                  {receipt.paymentMethod === 'cash' ? 'ເງິນສົດ' : 'ໂອນເງິນ'}
+                </span>
+              </td>
+              <td className="py-3 px-4 text-center">
+                <button
+                  onClick={() => handlePrintReceipt(receipt)}
+                  className="flex items-center space-x-1 px-3 py-1 bg-blue-50 hover:bg-blue-100 text-blue-700 rounded-lg transition-colors text-xs font-medium"
+                >
+                  <Printer className="w-3 h-3" />
+                  <span>ພິມ</span>
+                </button>
+              </td>
+            </tr>
+          );
+        })}
+      </tbody>
+    </table>
+  </div>
+</div>
+) : (
+  /* Tenant View */
+  <div className="divide-y divide-gray-200 max-h-[650px] overflow-y-auto">
+    {groupedReceipts.map((group) => (
+      <div key={group.tenant.tenantId}>
+        <div 
+          className="flex items-center justify-between p-4 hover:bg-gray-50 cursor-pointer"
+          onClick={() => toggleTenantExpansion(group.tenant.tenantId)}
+        >
+          <div className="flex items-center space-x-3">
+            {expandedTenants.has(group.tenant.tenantId) ? (
+              <ChevronDown className="w-4 h-4 text-gray-400" />
+            ) : (
+              <ChevronRight className="w-4 h-4 text-gray-400" />
+            )}
+            <div>
+              <div className="font-medium text-gray-900">{group.tenant.tenantName}</div>
+              <div className="text-sm text-gray-500">
+                {group.receiptCount} ໃບຮັບເງິນ
+                {group.latestPayment && (
+                  <span className="ml-2 text-xs text-gray-400">
+                    ຄັ້ງຫຼ້າສຸດ: {group.latestPayment.toLocaleDateString('lo-LA')}
+                  </span>
+                )}
+              </div>
+            </div>
+          </div>
+          <div className="text-right">
+            <div className="font-bold text-green-600">₭{group.totalAmount.toLocaleString()}</div>
+            <div className="text-sm text-gray-500">ລວມທັງໝົດ</div>
+          </div>
+        </div>
+
+        {expandedTenants.has(group.tenant.tenantId) && (
+          <div className="bg-gray-50 px-4">
+            {group.receipts.map((receipt) => {
+              const space = spaces.find(s => 
+                s.id === receipt.spaceId || s.id === receipt.roomId
+              );
+              const originalAmount = receipt.originalAmount || receipt.amountDue || receipt.amount || 0;
+              const lateFee = receipt.lateFee || 0;
+              const totalAmount = originalAmount + lateFee;
+
+              return (
+                <div key={receipt.id || receipt.paymentId} className="flex items-center justify-between py-3 border-b border-gray-200 last:border-b-0">
+                  <div className="flex items-center space-x-3">
+                    <Receipt className="w-4 h-4 text-green-600" />
+                    <div>
+                      <div className="font-medium text-gray-900">
+                        {receipt.receiptNumber}
+                        <span className="ml-2 text-sm text-gray-600">({space?.spaceCode})</span>
+                      </div>
+                      <div className="text-xs text-gray-500 flex items-center space-x-2">
+                        <span className={`px-2 py-1 rounded-full ${getFrequencyColor(receipt.paymentFrequency || receipt.paymentType)}`}>
                           {getFrequencyText(receipt.paymentFrequency || receipt.paymentType)}
                         </span>
-                      </td>
-                      <td className="py-3 px-4 text-right">
-                        <div className="font-medium text-gray-900">₭{originalAmount.toLocaleString()}</div>
-                      </td>
-                      <td className="py-3 px-4 text-right">
-                        {lateFee > 0 ? (
-                          <div className="font-medium text-red-600">₭{lateFee.toLocaleString()}</div>
-                        ) : (
-                          <span className="text-gray-400 text-xs">-</span>
-                        )}
-                      </td>
-                      <td className="py-3 px-4 text-right">
-                        <div className="font-bold text-green-600">₭{totalAmount.toLocaleString()}</div>
-                      </td>
-                      <td className="py-3 px-4 text-gray-600 text-sm">
-                        {receipt.paymentDate ? new Date(receipt.paymentDate).toLocaleDateString('lo-LA') : 'N/A'}
-                      </td>
-                      <td className="py-3 px-4">
-                        <span className={`inline-flex px-2 py-1 text-xs font-medium rounded-full ${
+                        <span>{space?.spaceType}</span>
+                        <span className={`px-2 py-1 rounded-full ${
                           receipt.paymentMethod === 'cash' 
                             ? 'bg-green-100 text-green-800' 
                             : 'bg-blue-100 text-blue-800'
                         }`}>
                           {receipt.paymentMethod === 'cash' ? 'ເງິນສົດ' : 'ໂອນເງິນ'}
                         </span>
-                      </td>
-                      <td className="py-3 px-4 text-center">
-                        <button
-                          onClick={() => handlePrintReceipt(receipt)}
-                          className="flex items-center space-x-1 px-3 py-1 bg-blue-50 hover:bg-blue-100 text-blue-700 rounded-lg transition-colors text-xs font-medium"
-                        >
-                          <Printer className="w-3 h-3" />
-                          <span>ພິມ</span>
-                        </button>
-                      </td>
-                    </tr>
-                  );
-                })}
-              </tbody>
-            </table>
-          </div>
-        ) : (
-          /* Tenant View */
-          <div className="divide-y divide-gray-200">
-            {groupedReceipts.map((group) => (
-              <div key={group.tenant.tenantId}>
-                <div 
-                  className="flex items-center justify-between p-4 hover:bg-gray-50 cursor-pointer"
-                  onClick={() => toggleTenantExpansion(group.tenant.tenantId)}
-                >
-                  <div className="flex items-center space-x-3">
-                    {expandedTenants.has(group.tenant.tenantId) ? (
-                      <ChevronDown className="w-4 h-4 text-gray-400" />
-                    ) : (
-                      <ChevronRight className="w-4 h-4 text-gray-400" />
-                    )}
-                    <div>
-                      <div className="font-medium text-gray-900">{group.tenant.tenantName}</div>
-                      <div className="text-sm text-gray-500">
-                        {group.receiptCount} ໃບຮັບເງິນ
-                        {group.latestPayment && (
-                          <span className="ml-2 text-xs text-gray-400">
-                            ຄັ້ງຫຼ້າສຸດ: {group.latestPayment.toLocaleDateString('lo-LA')}
-                          </span>
-                        )}
                       </div>
                     </div>
                   </div>
-                  <div className="text-right">
-                    <div className="font-bold text-green-600">₭{group.totalAmount.toLocaleString()}</div>
-                    <div className="text-sm text-gray-500">ລວມທັງໝົດ</div>
+                  
+                  <div className="flex items-center space-x-4">
+                    <div className="text-right">
+                      <div className="font-medium text-green-600">₭{totalAmount.toLocaleString()}</div>
+                      <div className="text-xs text-gray-500">
+                        {receipt.paymentDate ? new Date(receipt.paymentDate).toLocaleDateString("lo-LA") : 'N/A'}
+                      </div>
+                    </div>
+                    
+                    <button
+                      onClick={() => handlePrintReceipt(receipt)}
+                      className="flex items-center space-x-1 px-3 py-1 bg-blue-50 hover:bg-blue-100 text-blue-700 rounded-lg transition-colors text-xs font-medium"
+                    >
+                      <Printer className="w-3 h-3" />
+                      <span>ພິມ</span>
+                    </button>
                   </div>
                 </div>
-
-                {expandedTenants.has(group.tenant.tenantId) && (
-                  <div className="bg-gray-50 px-4">
-                    {group.receipts.map((receipt) => {
-                      const space = spaces.find(s => 
-                        s.id === receipt.spaceId || s.id === receipt.roomId
-                      );
-                      const originalAmount = receipt.originalAmount || receipt.amountDue || receipt.amount || 0;
-                      const lateFee = receipt.lateFee || 0;
-                      const totalAmount = originalAmount + lateFee;
-
-                      return (
-                        <div key={receipt.id || receipt.paymentId} className="flex items-center justify-between py-3 border-b border-gray-200 last:border-b-0">
-                          <div className="flex items-center space-x-3">
-                            <Receipt className="w-4 h-4 text-green-600" />
-                            <div>
-                              <div className="font-medium text-gray-900">
-                                {receipt.receiptNumber}
-                                <span className="ml-2 text-sm text-gray-600">({space?.spaceCode})</span>
-                              </div>
-                              <div className="text-xs text-gray-500 flex items-center space-x-2">
-                                <span className={`px-2 py-1 rounded-full ${getFrequencyColor(receipt.paymentFrequency || receipt.paymentType)}`}>
-                                  {getFrequencyText(receipt.paymentFrequency || receipt.paymentType)}
-                                </span>
-                                <span>{space?.spaceType}</span>
-                                <span className={`px-2 py-1 rounded-full ${
-                                  receipt.paymentMethod === 'cash' 
-                                    ? 'bg-green-100 text-green-800' 
-                                    : 'bg-blue-100 text-blue-800'
-                                }`}>
-                                  {receipt.paymentMethod === 'cash' ? 'ເງິນສົດ' : 'ໂອນເງິນ'}
-                                </span>
-                              </div>
-                            </div>
-                          </div>
-                          
-                          <div className="flex items-center space-x-4">
-                            <div className="text-right">
-                              <div className="font-medium text-green-600">₭{totalAmount.toLocaleString()}</div>
-                              <div className="text-xs text-gray-500">
-                                {receipt.paymentDate ? new Date(receipt.paymentDate).toLocaleDateString("lo-LA") : 'N/A'}
-                              </div>
-                            </div>
-                            
-                            <button
-                              onClick={() => handlePrintReceipt(receipt)}
-                              className="flex items-center space-x-1 px-3 py-1 bg-blue-50 hover:bg-blue-100 text-blue-700 rounded-lg transition-colors text-xs font-medium"
-                            >
-                              <Printer className="w-3 h-3" />
-                              <span>ພິມ</span>
-                            </button>
-                          </div>
-                        </div>
-                      );
-                    })}
-                  </div>
-                )}
-              </div>
-            ))}
+              );
+            })}
           </div>
         )}
+      </div>
+    ))}
+  </div>
+)}
 
         {(viewMode === "list" ? filteredReceipts : groupedReceipts).length === 0 && (
           <div className="text-center py-12">

@@ -286,85 +286,87 @@ const TenantManagement: React.FC = () => {
       </div>
 
       {/* Tenants Grid - Updated with xl:grid-cols-5 */}
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 2xl:grid-cols-5 gap-6">
-        {filteredTenants.map((tenant) => {
-          const tenantSpaces = getTenantSpaces(tenant);
+    <div className="max-h-[650px] overflow-y-auto">
+  <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 2xl:grid-cols-5 gap-6">
+    {filteredTenants.map((tenant) => {
+      const tenantSpaces = getTenantSpaces(tenant);
 
-          return (
-            <div
-              key={tenant.tenantId}
-              className="bg-white rounded-xl shadow-sm border border-gray-200 p-6 hover:shadow-md transition-shadow"
-            >
-              <div className="flex justify-between items-start mb-4">
-                <div className="flex items-center space-x-3">
-                  <div className="w-12 h-12 bg-blue-100 rounded-full flex items-center justify-center">
-                    <UserCheck className="w-6 h-6 text-blue-600" />
-                  </div>
-                  <div>
-                    <h3 className="text-lg font-semibold text-gray-900">
-                      {tenant.tenantName}
-                    </h3>
-                    {tenant.contact ? (
-                      <p className="text-sm text-gray-600 flex items-center gap-2">
-                        <Phone className="w-4 h-4" />
-                        <span>{tenant.contact}</span>
-                      </p>
-                    ) : null}
-                  </div>
-                </div>
+      return (
+        <div
+          key={tenant.tenantId}
+          className="bg-white rounded-xl shadow-sm border border-gray-200 p-6 hover:shadow-md transition-shadow"
+        >
+          <div className="flex justify-between items-start mb-4">
+            <div className="flex items-center space-x-3">
+              <div className="w-12 h-12 bg-blue-100 rounded-full flex items-center justify-center">
+                <UserCheck className="w-6 h-6 text-blue-600" />
               </div>
-
-              {/* Assigned Spaces */}
-              <div className="bg-blue-50 rounded-lg p-3 mb-4">
-                <div className="flex items-center space-x-2 mb-2">
-                  <Hash className="w-4 h-4 text-blue-600" />
-                  <span className="text-sm font-medium text-blue-800">
-                    ພື້ນທີ່ເຊົ່າ ({tenantSpaces.length})
-                  </span>
-                </div>
-                {tenantSpaces.length > 0 ? (
-                  <div className="flex flex-wrap gap-1">
-                    {tenantSpaces.slice(0, 3).map((space) => (
-                      <span
-                        key={space.id}
-                        className="px-2 py-1 bg-blue-100 text-blue-700 text-xs rounded"
-                      >
-                        {space.spaceCode} ({space.zone})
-                      </span>
-                    ))}
-                    {tenantSpaces.length > 3 && (
-                      <span className="px-2 py-1 bg-blue-200 text-blue-800 text-xs rounded">
-                        +{tenantSpaces.length - 3} ອື່ນໆ
-                      </span>
-                    )}
-                  </div>
-                ) : (
-                  <p className="text-sm text-blue-600">ຍັງບໍ່ມີພື້ນທີ່ເຊົ່າ</p>
-                )}
-              </div>
-
-              {/* Actions */}
-              <div className="flex space-x-2">
-                <button
-                  onClick={() => handleEditTenant(tenant)}
-                  disabled={isSubmitting}
-                  className="flex-1 flex items-center justify-center space-x-1 px-3 py-2 bg-blue-50 hover:bg-blue-100 text-blue-700 rounded-lg transition-colors text-sm disabled:opacity-50"
-                >
-                  <Edit className="w-4 h-4" />
-                  <span>ແກ້ໄຂ</span>
-                </button>
-                <button
-                  onClick={() => handleDeleteTenant(tenant.tenantId)}
-                  disabled={isSubmitting}
-                  className="flex items-center justify-center px-3 py-2 bg-red-50 hover:bg-red-100 text-red-700 rounded-lg transition-colors disabled:opacity-50"
-                >
-                  <Trash2 className="w-4 h-4" />
-                </button>
+              <div>
+                <h3 className="text-lg font-semibold text-gray-900">
+                  {tenant.tenantName}
+                </h3>
+                {tenant.contact ? (
+                  <p className="text-sm text-gray-600 flex items-center gap-2">
+                    <Phone className="w-4 h-4" />
+                    <span>{tenant.contact}</span>
+                  </p>
+                ) : null}
               </div>
             </div>
-          );
-        })}
-      </div>
+          </div>
+
+          {/* Assigned Spaces */}
+          <div className="bg-blue-50 rounded-lg p-3 mb-4">
+            <div className="flex items-center space-x-2 mb-2">
+              <Hash className="w-4 h-4 text-blue-600" />
+              <span className="text-sm font-medium text-blue-800">
+                ພື້ນທີ່ເຊົ່າ ({tenantSpaces.length})
+              </span>
+            </div>
+            {tenantSpaces.length > 0 ? (
+              <div className="flex flex-wrap gap-1">
+                {tenantSpaces.slice(0, 3).map((space) => (
+                  <span
+                    key={space.id}
+                    className="px-2 py-1 bg-blue-100 text-blue-700 text-xs rounded"
+                  >
+                    {space.spaceCode} ({space.zone})
+                  </span>
+                ))}
+                {tenantSpaces.length > 3 && (
+                  <span className="px-2 py-1 bg-blue-200 text-blue-800 text-xs rounded">
+                    +{tenantSpaces.length - 3} ອື່ນໆ
+                  </span>
+                )}
+              </div>
+            ) : (
+              <p className="text-sm text-blue-600">ຍັງບໍ່ມີພື້ນທີ່ເຊົ່າ</p>
+            )}
+          </div>
+
+          {/* Actions */}
+          <div className="flex space-x-2">
+            <button
+              onClick={() => handleEditTenant(tenant)}
+              disabled={isSubmitting}
+              className="flex-1 flex items-center justify-center space-x-1 px-3 py-2 bg-blue-50 hover:bg-blue-100 text-blue-700 rounded-lg transition-colors text-sm disabled:opacity-50"
+            >
+              <Edit className="w-4 h-4" />
+              <span>ແກ້ໄຂ</span>
+            </button>
+            <button
+              onClick={() => handleDeleteTenant(tenant.tenantId)}
+              disabled={isSubmitting}
+              className="flex items-center justify-center px-3 py-2 bg-red-50 hover:bg-red-100 text-red-700 rounded-lg transition-colors disabled:opacity-50"
+            >
+              <Trash2 className="w-4 h-4" />
+            </button>
+          </div>
+        </div>
+      );
+    })}
+  </div>
+</div>
 
       {/* Empty State */}
       {filteredTenants.length === 0 && (

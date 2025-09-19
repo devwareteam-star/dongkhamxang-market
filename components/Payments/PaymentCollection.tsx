@@ -7,12 +7,10 @@ import { Payment } from "@/types";
 import {
   Search,
   CreditCard,
-  Printer,
   CheckCircle,
   Clock,
   AlertTriangle,
   Calendar,
-  Filter,
   Building2,
   ChevronDown,
   ChevronRight,
@@ -20,12 +18,11 @@ import {
   List,
 } from "lucide-react";
 import PaymentModal from "./PaymentModal";
-import ReceiptModal from "./ReceiptModal";
+import BulkPaymentModal from "./BulkPaymentModal";
 
 const PaymentCollection: React.FC = () => {
   const { 
     payments, 
-    paidPayments,
     spaces, 
     tenants, 
     updatePayment, 
@@ -36,7 +33,7 @@ const PaymentCollection: React.FC = () => {
   const { user } = useAuth();
 
   // Clean up duplicate data
-   const { cleanupDuplicatePayments } = useData();
+  const { cleanupDuplicatePayments } = useData();
   const [isCleaningUp, setIsCleaningUp] = useState(false);
   
   // New state for enhanced UI
@@ -50,8 +47,8 @@ const PaymentCollection: React.FC = () => {
   const [spaceTypeFilter, setSpaceTypeFilter] = useState<string>("all");
   const [selectedPayment, setSelectedPayment] = useState<Payment | null>(null);
   const [isPaymentModalOpen, setIsPaymentModalOpen] = useState(false);
-  const [isReceiptModalOpen, setIsReceiptModalOpen] = useState(false);
   const [isGeneratingPayments, setIsGeneratingPayments] = useState(false);
+  const [isBulkPaymentModalOpen, setIsBulkPaymentModalOpen] = useState(false);
 
   // Helper functions
   const getPaymentAmount = (payment: Payment) => {
@@ -89,57 +86,43 @@ const PaymentCollection: React.FC = () => {
     }
   };
 
-const getDaysOverdue = (payment: Payment) => {
-  // Calculate status based on due date instead of stored status
-  const today = new Date();
-  const todayStart = new Date(today.getFullYear(), today.getMonth(), today.getDate());
-  const dueDate = new Date(payment.originalDueDate || payment.dueDate);
-  
-  if (dueDate >= todayStart) return 0; // Not overdue
-  
-  const now = new Date();
-  return Math.floor((now.getTime() - dueDate.getTime()) / (1000 * 60 * 60 * 24));
-};
-
-  // Time-based filtering
+  // Time-based filtering (removed history tab)
   const getTimeFilteredPayments = () => {
-  const today = new Date();
-  const todayStart = new Date(today.getFullYear(), today.getMonth(), today.getDate());
-  const futureStart = new Date(todayStart);
-  futureStart.setDate(futureStart.getDate() + 1);
+    const today = new Date();
+    const todayStart = new Date(today.getFullYear(), today.getMonth(), today.getDate());
+    const futureStart = new Date(todayStart);
+    futureStart.setDate(futureStart.getDate() + 1);
 
-  switch (activeTimeTab) {
-    case "overdue":
-      return payments.filter(payment => {
-        const today = new Date();
-        const todayStart = new Date(today.getFullYear(), today.getMonth(), today.getDate());
-        const dueDate = new Date(payment.dueDate);
-        return payment.status !== 'paid' && dueDate < todayStart;
-      });
-    case "current":
-      return payments.filter(payment => {
-        const today = new Date();
-        const todayStart = new Date(today.getFullYear(), today.getMonth(), today.getDate());
-        const todayEnd = new Date(todayStart);
-        todayEnd.setDate(todayEnd.getDate() + 1);
-        const dueDate = new Date(payment.dueDate);
-        return payment.status !== 'paid' && dueDate >= todayStart && dueDate < todayEnd;
-      });
-    case "future":
-      return payments.filter(payment => {
-        const today = new Date();
-        const todayStart = new Date(today.getFullYear(), today.getMonth(), today.getDate());
-        const todayEnd = new Date(todayStart);
-        todayEnd.setDate(todayEnd.getDate() + 1);
-        const dueDate = new Date(payment.dueDate);
-        return payment.status !== 'paid' && dueDate >= todayEnd;
-      });
-    case "history":
-      return paidPayments; // CHANGED: Use paidPayments instead of filtering payments
-    default:
-      return payments;
-  }
-};
+    switch (activeTimeTab) {
+      case "overdue":
+        return payments.filter(payment => {
+          const today = new Date();
+          const todayStart = new Date(today.getFullYear(), today.getMonth(), today.getDate());
+          const dueDate = new Date(payment.dueDate);
+          return payment.status !== 'paid' && dueDate < todayStart;
+        });
+      case "current":
+        return payments.filter(payment => {
+          const today = new Date();
+          const todayStart = new Date(today.getFullYear(), today.getMonth(), today.getDate());
+          const todayEnd = new Date(todayStart);
+          todayEnd.setDate(todayEnd.getDate() + 1);
+          const dueDate = new Date(payment.dueDate);
+          return payment.status !== 'paid' && dueDate >= todayStart && dueDate < todayEnd;
+        });
+      case "future":
+        return payments.filter(payment => {
+          const today = new Date();
+          const todayStart = new Date(today.getFullYear(), today.getMonth(), today.getDate());
+          const todayEnd = new Date(todayStart);
+          todayEnd.setDate(todayEnd.getDate() + 1);
+          const dueDate = new Date(payment.dueDate);
+          return payment.status !== 'paid' && dueDate >= todayEnd;
+        });
+      default:
+        return payments.filter(payment => payment.status !== 'paid');
+    }
+  };
 
   // Filter payments based on all filters
   const getFilteredPayments = () => {
@@ -203,9 +186,9 @@ const getDaysOverdue = (payment: Payment) => {
       }
       
       const today = new Date();
-const todayStart = new Date(today.getFullYear(), today.getMonth(), today.getDate());
-const dueDate = new Date(payment.dueDate);
-if (payment.status !== 'paid' && dueDate < todayStart) {
+      const todayStart = new Date(today.getFullYear(), today.getMonth(), today.getDate());
+      const dueDate = new Date(payment.dueDate);
+      if (payment.status !== 'paid' && dueDate < todayStart) {
         group.overdueCount++;
       }
     });
@@ -227,7 +210,7 @@ if (payment.status !== 'paid' && dueDate < todayStart) {
     setExpandedTenants(newExpanded);
   };
 
-  // Event handlers (existing ones)
+  // Event handlers
   const handleGeneratePayments = async (frequency: 'daily' | 'monthly' | 'yearly') => {
     try {
       setIsGeneratingPayments(true);
@@ -247,8 +230,8 @@ if (payment.status !== 'paid' && dueDate < todayStart) {
   };
 
   const handlePaymentCollectedFromModal = async (data: { 
-  paymentMethod: 'cash' | 'transfer' | undefined; 
-  notes?: string | undefined 
+    paymentMethod: 'cash' | 'transfer' | undefined; 
+    notes?: string | undefined 
   }) => {
     if (!selectedPayment) return;
 
@@ -272,60 +255,81 @@ if (payment.status !== 'paid' && dueDate < todayStart) {
     }
   };
 
-  const handlePrintReceipt = (payment: Payment) => {
-    setSelectedPayment(payment);
-    setIsReceiptModalOpen(true);
+  const handleBulkPaymentSubmit = async (data: {
+    payments: Payment[];
+    paymentMethod: 'cash' | 'transfer';
+    notes?: string;
+  }) => {
+    try {
+      for (const payment of data.payments) {
+        const receiptNumber = generateReceiptNumber();
+        await updatePayment(payment.id, {
+          paymentStatus: 'paid',
+          paymentDate: new Date(),
+          paymentMethod: data.paymentMethod,
+          receiptNumber,
+          processedBy: user?.id,
+          notes: data.notes || undefined
+        });
+      }
+      
+      setIsBulkPaymentModalOpen(false);
+      alert(`ເກັບເງິນສຳເລັດແລ້ວ ${data.payments.length} ລາຍການ`);
+    } catch (error) {
+      console.error("Error processing bulk payments:", error);
+      alert("ເກີດຂໍ້ຜິດພາດໃນການເກັບເງິນຫຼາຍ");
+    }
   };
 
-  // Status helpers (existing ones)
-const getStatusIcon = (payment: Payment) => {
-  if (payment.status === 'paid') {
-    return <CheckCircle className="w-4 h-4 text-green-600" />;
-  }
-  
-  // Check if overdue based on due date
-  const today = new Date();
-  const todayStart = new Date(today.getFullYear(), today.getMonth(), today.getDate());
-  const dueDate = new Date(payment.dueDate);
-  
-  if (dueDate < todayStart) {
-    return <AlertTriangle className="w-4 h-4 text-red-600" />;
-  } else {
-    return <Clock className="w-4 h-4 text-yellow-600" />;
-  }
-};
+  // Status helpers
+  const getStatusIcon = (payment: Payment) => {
+    if (payment.status === 'paid') {
+      return <CheckCircle className="w-4 h-4 text-green-600" />;
+    }
+    
+    // Check if overdue based on due date
+    const today = new Date();
+    const todayStart = new Date(today.getFullYear(), today.getMonth(), today.getDate());
+    const dueDate = new Date(payment.dueDate);
+    
+    if (dueDate < todayStart) {
+      return <AlertTriangle className="w-4 h-4 text-red-600" />;
+    } else {
+      return <Clock className="w-4 h-4 text-yellow-600" />;
+    }
+  };
 
-const getStatusColor = (payment: Payment) => {
-  if (payment.status === 'paid') {
-    return "bg-green-100 text-green-800";
-  }
-  
-  const today = new Date();
-  const todayStart = new Date(today.getFullYear(), today.getMonth(), today.getDate());
-  const dueDate = new Date(payment.dueDate);
-  
-  if (dueDate < todayStart) {
-    return "bg-red-100 text-red-800";
-  } else {
-    return "bg-yellow-100 text-yellow-800";
-  }
-};
+  const getStatusColor = (payment: Payment) => {
+    if (payment.status === 'paid') {
+      return "bg-green-100 text-green-800";
+    }
+    
+    const today = new Date();
+    const todayStart = new Date(today.getFullYear(), today.getMonth(), today.getDate());
+    const dueDate = new Date(payment.dueDate);
+    
+    if (dueDate < todayStart) {
+      return "bg-red-100 text-red-800";
+    } else {
+      return "bg-yellow-100 text-yellow-800";
+    }
+  };
 
-const getStatusText = (payment: Payment) => {
-  if (payment.status === 'paid') {
-    return "ຈ່າຍແລ້ວ";
-  }
-  
-  const today = new Date();
-  const todayStart = new Date(today.getFullYear(), today.getMonth(), today.getDate());
-  const dueDate = new Date(payment.dueDate);
-  
-  if (dueDate < todayStart) {
-    return "ເກີນກຳນົດ";
-  } else {
-    return "ລໍຖ້າຊຳລະ";
-  }
-};
+  const getStatusText = (payment: Payment) => {
+    if (payment.status === 'paid') {
+      return "ຈ່າຍແລ້ວ";
+    }
+    
+    const today = new Date();
+    const todayStart = new Date(today.getFullYear(), today.getMonth(), today.getDate());
+    const dueDate = new Date(payment.dueDate);
+    
+    if (dueDate < todayStart) {
+      return "ເກີນກຳນົດ";
+    } else {
+      return "ລໍຖ້າຊຳລະ";
+    }
+  };
 
   const getFrequencyColor = (type: Payment["paymentType"]) => {
     switch (type) {
@@ -367,49 +371,44 @@ const getStatusText = (payment: Payment) => {
         </div>
       </div>
     );
-  };
+  }
 
-  // Time-based tabs
+  // Time-based tabs (removed history tab)
   const timeTabs = [
-     { 
-    id: "overdue", 
-    label: "ກາຍມື້", 
-    count: payments.filter(p => {
-      const today = new Date();
-      const todayStart = new Date(today.getFullYear(), today.getMonth(), today.getDate());
-      const dueDate = new Date(p.dueDate);
-      return p.status !== 'paid' && dueDate < todayStart;
-    }).length 
-  },
-   { 
-    id: "current", 
-    label: "ປັດຈຸບັນ", 
-    count: payments.filter(p => {
-      const today = new Date();
-      const todayStart = new Date(today.getFullYear(), today.getMonth(), today.getDate());
-      const todayEnd = new Date(todayStart);
-      todayEnd.setDate(todayEnd.getDate() + 1);
-      const dueDate = new Date(p.dueDate);
-      return p.status !== 'paid' && dueDate >= todayStart && dueDate < todayEnd;
-    }).length 
-  },
-  { 
-    id: "future", 
-    label: "ອະນາຄົດ", 
-    count: payments.filter(p => {
-      const today = new Date();
-      const todayStart = new Date(today.getFullYear(), today.getMonth(), today.getDate());
-      const todayEnd = new Date(todayStart);
-      todayEnd.setDate(todayEnd.getDate() + 1);
-      const dueDate = new Date(p.dueDate);
-      return p.status !== 'paid' && dueDate >= todayEnd;
-    }).length 
-  },
     { 
-    id: "history", 
-    label: "ປະຫວັດ", 
-    count: paidPayments.length // CHANGED: Use paidPayments.length instead of filtering
-  },
+      id: "overdue", 
+      label: "ກາຍມື້", 
+      count: payments.filter(p => {
+        const today = new Date();
+        const todayStart = new Date(today.getFullYear(), today.getMonth(), today.getDate());
+        const dueDate = new Date(p.dueDate);
+        return p.status !== 'paid' && dueDate < todayStart;
+      }).length 
+    },
+    { 
+      id: "current", 
+      label: "ປັດຈຸບັນ", 
+      count: payments.filter(p => {
+        const today = new Date();
+        const todayStart = new Date(today.getFullYear(), today.getMonth(), today.getDate());
+        const todayEnd = new Date(todayStart);
+        todayEnd.setDate(todayEnd.getDate() + 1);
+        const dueDate = new Date(p.dueDate);
+        return p.status !== 'paid' && dueDate >= todayStart && dueDate < todayEnd;
+      }).length 
+    },
+    { 
+      id: "future", 
+      label: "ອະນາຄົດ", 
+      count: payments.filter(p => {
+        const today = new Date();
+        const todayStart = new Date(today.getFullYear(), today.getMonth(), today.getDate());
+        const todayEnd = new Date(todayStart);
+        todayEnd.setDate(todayEnd.getDate() + 1);
+        const dueDate = new Date(p.dueDate);
+        return p.status !== 'paid' && dueDate >= todayEnd;
+      }).length 
+    }
   ];
 
   // Frequency tabs
@@ -439,11 +438,45 @@ const getStatusText = (payment: Payment) => {
   return (
     <div className="space-y-6">
       {/* Header */}
-      <div>
-        <h1 className="text-3xl font-bold text-gray-900">ການຊຳລະເງິນ</h1>
-        <p className="text-gray-600 mt-1">
-          ຈັດການການເກັບເງິນຄ່າເຊົ່າ - ລາຍການທັງໝົດ {filteredPayments.length} ລາຍການ
-        </p>
+      <div className="flex justify-between items-start">
+        <div>
+          <h1 className="text-3xl font-bold text-gray-900">ການຊຳລະເງິນ</h1>
+          <p className="text-gray-600 mt-1">
+            ຈັດການການເກັບເງິນຄ່າເຊົ່າ - ລາຍການທັງໝົດ {filteredPayments.length} ລາຍການ
+          </p>
+        </div>
+        
+        <div className="flex space-x-2">
+          <button
+            onClick={async () => {
+              try {
+                setIsGeneratingPayments(true);
+                await generatePaymentsForAllTenants('daily');
+                await generatePaymentsForAllTenants('monthly');  
+                await generatePaymentsForAllTenants('yearly');
+                alert('ສ້າງການຊຳລະເງິນທັງໝົດສຳເລັດແລ້ວ');
+              } catch (error) {
+                console.error('Error generating payments:', error);
+                alert('ເກີດຂໍ້ຜິດພາດໃນການສ້າງການຊຳລະເງິນ');
+              } finally {
+                setIsGeneratingPayments(false);
+              }
+            }}
+            disabled={isGeneratingPayments}
+            className="flex items-center justify-center px-3 py-2 bg-blue-50 hover:bg-blue-100 border border-blue-200 rounded text-xs font-medium text-blue-700 transition-colors disabled:opacity-50"
+          >
+            <Calendar className="w-3 h-3 mr-1" />
+            ສ້າງລາຍຈ່າຍທັງໝົດ
+          </button>
+          
+          <button
+            onClick={() => setIsBulkPaymentModalOpen(true)}
+            className="flex items-center justify-center px-3 py-2 bg-green-50 hover:bg-green-100 border border-green-200 rounded text-xs font-medium text-green-700 transition-colors"
+          >
+            <CreditCard className="w-3 h-3 mr-1" />
+            ເກັບເງິນຫຼາຍ
+          </button>
+        </div>
       </div>
 
       {/* Time-based Navigation */}
@@ -558,43 +591,7 @@ const getStatusText = (payment: Payment) => {
               {viewMode === "list" ? filteredPayments.length : groupedPayments.length} ລາຍການ
             </div>
 
-            {/* Payment Generation - Only show for current period */}
-            {(activeTimeTab === "overdue" || activeTimeTab === "current") && (
-              <div className="flex space-x-1">
-                <button
-                  onClick={() => handleGeneratePayments('daily')}
-                  disabled={isGeneratingPayments}
-                  className="flex-1 flex items-center justify-center px-2 py-2 bg-orange-50 hover:bg-orange-100 border border-orange-200 rounded text-xs font-medium text-orange-700 transition-colors disabled:opacity-50"
-                >
-                  <Calendar className="w-3 h-3 mr-1" />
-                  ວັນ
-                </button>
-                <button
-                  onClick={() => handleGeneratePayments('monthly')}
-                  disabled={isGeneratingPayments}
-                  className="flex-1 flex items-center justify-center px-2 py-2 bg-green-50 hover:bg-green-100 border border-green-200 rounded text-xs font-medium text-green-700 transition-colors disabled:opacity-50"
-                >
-                  <Calendar className="w-3 h-3 mr-1" />
-                  ເດືອນ
-                </button>
-                <button
-                  onClick={() => handleGeneratePayments('yearly')}
-                  disabled={isGeneratingPayments}
-                  className="flex-1 flex items-center justify-center px-2 py-2 bg-blue-50 hover:bg-blue-100 border border-blue-200 rounded text-xs font-medium text-blue-700 transition-colors disabled:opacity-50"
-                >
-                  <Calendar className="w-3 h-3 mr-1" />
-                  ປີ
-                </button>
-                 <button 
-                 className="text-xs border-2 border-red-500"
-      onClick={handleCleanup} 
-      disabled={isCleaningUp}
-    >
-      {isCleaningUp ? 'Cleaning...' : 'Cleanup Duplicate Payments'}
-    </button>
-  
-              </div>
-            )}
+            <div className="flex items-center justify-center"></div>
           </div>
         </div>
       </div>
@@ -603,199 +600,193 @@ const getStatusText = (payment: Payment) => {
       <div className="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden">
         {viewMode === "list" ? (
           /* List View */
-          <div className="overflow-x-auto">
-            <table className="w-full">
-              <thead className="bg-gray-50 border-b border-gray-200">
-                <tr>
-                  <th className="text-left py-3 px-4 font-medium text-gray-700 text-sm">ສະຖານະ</th>
-                  <th className="text-left py-3 px-4 font-medium text-gray-700 text-sm">ພື້ນທີ່</th>
-                  <th className="text-left py-3 px-4 font-medium text-gray-700 text-sm">ຜູ້ເຊົ່າ</th>
-                  <th className="text-left py-3 px-4 font-medium text-gray-700 text-sm">ຮອບ</th>
-                  <th className="text-right py-3 px-4 font-medium text-gray-700 text-sm">ເງິນຕົ້ນ</th>
-                  <th className="text-right py-3 px-4 font-medium text-gray-700 text-sm">ຄ່າປັບ</th>
-                  <th className="text-right py-3 px-4 font-medium text-gray-700 text-sm">ລວມ</th>
-                  <th className="text-left py-3 px-4 font-medium text-gray-700 text-sm">ກຳນົດ</th>
-                  <th className="text-center py-3 px-4 font-medium text-gray-700 text-sm">ການດຳເນີນການ</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-gray-100">
-                {filteredPayments.map((payment) => {
-                  const space = spaces.find(s => 
-                     s.id === payment.spaceId || s.id === payment.roomId
-                  );
-                  const tenant = tenants.find(t => t.tenantId === payment.tenantId);
-                  const originalAmount = payment.originalAmount || getPaymentAmount(payment);
-                  const totalAmount = originalAmount + (payment.lateFee || 0);
+         <div className="overflow-x-auto">
+  <div className="max-h-[650px] overflow-y-auto">
+    <table className="w-full">
+      <thead className="bg-gray-50 border-b border-gray-200 sticky top-0 z-10">
+        <tr>
+          <th className="text-left py-3 px-4 font-medium text-gray-700 text-sm">ສະຖານະ</th>
+          <th className="text-left py-3 px-4 font-medium text-gray-700 text-sm">ພື້ນທີ່</th>
+          <th className="text-left py-3 px-4 font-medium text-gray-700 text-sm">ຜູ້ເຊົ່າ</th>
+          <th className="text-left py-3 px-4 font-medium text-gray-700 text-sm">ຮອບ</th>
+          <th className="text-right py-3 px-4 font-medium text-gray-700 text-sm">ເງິນຕົ້ນ</th>
+          <th className="text-right py-3 px-4 font-medium text-gray-700 text-sm">ຄ່າປັບ</th>
+          <th className="text-right py-3 px-4 font-medium text-gray-700 text-sm">ລວມ</th>
+          <th className="text-left py-3 px-4 font-medium text-gray-700 text-sm">ກຳນົດ</th>
+          <th className="text-center py-3 px-4 font-medium text-gray-700 text-sm">ການດຳເນີນການ</th>
+        </tr>
+      </thead>
+      <tbody className="divide-y divide-gray-100">
+        {filteredPayments.map((payment) => {
+          const space = spaces.find(s => 
+             s.id === payment.spaceId || s.id === payment.roomId
+          );
+          const tenant = tenants.find(t => t.tenantId === payment.tenantId);
+          const originalAmount = payment.originalAmount || getPaymentAmount(payment);
+          const totalAmount = originalAmount + (payment.lateFee || 0);
 
-                  return (
-                    <tr key={payment.id || payment.paymentId} className="hover:bg-gray-50 transition-colors">
-                      <td className="py-3 px-4">
-                        <div className="flex items-center space-x-2">
-                          {getStatusIcon(payment)}
-                          <span className={`px-2 py-1 text-xs font-medium rounded-full ${getStatusColor(payment)}`}>
-                            {getStatusText(payment)}
-                          </span>
-                        </div>
-                      </td>
-                      
-                      <td className="py-3 px-4">
-                        <div className="font-medium text-gray-900">{space?.spaceCode || 'N/A'}</div>
-                        <div className="text-xs text-gray-500">{space?.spaceType || 'N/A'}</div>
-                      </td>
-                      
-                      <td className="py-3 px-4">
-                        <div className="font-medium text-gray-900">{tenant?.tenantName || 'N/A'}</div>
-                      </td>
-                      
-                      <td className="py-3 px-4">
-                        <span className={`px-2 py-1 text-xs font-medium rounded-full ${getFrequencyColor(payment.paymentType)}`}>
+          return (
+            <tr key={payment.id || payment.paymentId} className="hover:bg-gray-50 transition-colors">
+              <td className="py-3 px-4">
+                <div className="flex items-center space-x-2">
+                  {getStatusIcon(payment)}
+                  <span className={`px-2 py-1 text-xs font-medium rounded-full ${getStatusColor(payment)}`}>
+                    {getStatusText(payment)}
+                  </span>
+                </div>
+              </td>
+              
+              <td className="py-3 px-4">
+                <div className="font-medium text-gray-900">{space?.spaceCode || 'N/A'}</div>
+                <div className="text-xs text-gray-500">{space?.spaceType || 'N/A'}</div>
+              </td>
+              
+              <td className="py-3 px-4">
+                <div className="font-medium text-gray-900">{tenant?.tenantName || 'N/A'}</div>
+              </td>
+              
+              <td className="py-3 px-4">
+                <span className={`px-2 py-1 text-xs font-medium rounded-full ${getFrequencyColor(payment.paymentType)}`}>
+                  {getFrequencyText(payment.paymentType)}
+                </span>
+              </td>
+              
+              <td className="py-3 px-4 text-right">
+                <div className="font-medium text-gray-900">₭{originalAmount.toLocaleString()}</div>
+              </td>
+              
+              <td className="py-3 px-4 text-right">
+                {getLateFeeDisplay(payment)}
+              </td>
+              
+              <td className="py-3 px-4 text-right">
+                <div className="font-bold text-gray-900">₭{totalAmount.toLocaleString()}</div>
+              </td>
+              
+              <td className="py-3 px-4">
+                <div className="text-sm text-gray-900">
+                  {new Date(payment.dueDate).toLocaleDateString("lo-LA")}
+                </div>
+              </td>
+              
+             <td className="py-3 px-4 text-center">
+  {activeTimeTab === "future" ? (
+    <div className="flex items-center justify-center px-3 py-1 text-xs text-gray-400">
+      <span>ຍັງບໍ່ເຖິງເວລາ</span>
+    </div>
+  ) : (
+    <button
+      onClick={() => handleCollectPayment(payment)}
+      className={`flex items-center space-x-1 px-3 py-1 rounded-lg transition-colors text-xs font-medium ${
+        payment.status === 'overdue'
+          ? "bg-red-50 hover:bg-red-100 text-red-700"
+          : "bg-green-50 hover:bg-green-100 text-green-700"
+      }`}
+    >
+      <CreditCard className="w-3 h-3" />
+      <span>ເກັບ</span>
+    </button>
+  )}
+</td>
+            </tr>
+          );
+        })}
+      </tbody>
+    </table>
+  </div>
+</div>
+) : (
+  /* Tenant View */
+  <div className="divide-y divide-gray-200 max-h-[650px] overflow-y-auto">
+    {groupedPayments.map((group) => (
+      <div key={group.tenant.tenantId}>
+        <div 
+          className="flex items-center justify-between p-4 hover:bg-gray-50 cursor-pointer"
+          onClick={() => toggleTenantExpansion(group.tenant.tenantId)}
+        >
+          <div className="flex items-center space-x-3">
+            {expandedTenants.has(group.tenant.tenantId) ? (
+              <ChevronDown className="w-4 h-4 text-gray-400" />
+            ) : (
+              <ChevronRight className="w-4 h-4 text-gray-400" />
+            )}
+            <div>
+              <div className="font-medium text-gray-900">{group.tenant.tenantName}</div>
+              <div className="text-sm text-gray-500">
+                {group.payments.length} ພື້ນທີ່
+                {group.overdueCount > 0 && (
+                  <span className="ml-2 px-2 py-1 bg-red-100 text-red-800 rounded-full text-xs">
+                    {group.overdueCount} ເກີນກຳນົດ
+                  </span>
+                )}
+              </div>
+            </div>
+          </div>
+          <div className="text-right">
+            <div className="font-bold text-gray-900">₭{group.totalDue.toLocaleString()}</div>
+            <div className="text-sm text-gray-500">ລວມທັງໝົດ</div>
+          </div>
+        </div>
+
+        {expandedTenants.has(group.tenant.tenantId) && (
+          <div className="bg-gray-50 px-4">
+            {group.payments.map((payment) => {
+              const space = spaces.find(s => 
+                 s.id === payment.spaceId || s.id === payment.roomId
+              );
+              const originalAmount = payment.originalAmount || getPaymentAmount(payment);
+              const totalAmount = originalAmount + (payment.lateFee || 0);
+
+              return (
+                <div key={payment.id || payment.paymentId} className="flex items-center justify-between py-3 border-b border-gray-200 last:border-b-0">
+                  <div className="flex items-center space-x-3">
+                    {getStatusIcon(payment)}
+                    <div>
+                      <div className="font-medium text-gray-900">{space?.spaceCode}</div>
+                      <div className="text-xs text-gray-500">
+                        <span className={`px-2 py-1 rounded-full ${getFrequencyColor(payment.paymentType)}`}>
                           {getFrequencyText(payment.paymentType)}
                         </span>
-                      </td>
-                      
-                      <td className="py-3 px-4 text-right">
-                        <div className="font-medium text-gray-900">₭{originalAmount.toLocaleString()}</div>
-                      </td>
-                      
-                      <td className="py-3 px-4 text-right">
-                        {getLateFeeDisplay(payment)}
-                      </td>
-                      
-                      <td className="py-3 px-4 text-right">
-                        <div className="font-bold text-gray-900">₭{totalAmount.toLocaleString()}</div>
-                      </td>
-                      
-                      <td className="py-3 px-4">
-                        <div className="text-sm text-gray-900">
-                          {new Date(payment.dueDate).toLocaleDateString("lo-LA")}
-                        </div>
-                      </td>
-                      
-                      <td className="py-3 px-4 text-center">
-                        {payment.status !== "paid" ? (
-                          <button
-                            onClick={() => handleCollectPayment(payment)}
-                            className={`flex items-center space-x-1 px-3 py-1 rounded-lg transition-colors text-xs font-medium ${
-                              payment.status === 'overdue'
-                                ? "bg-red-50 hover:bg-red-100 text-red-700"
-                                : "bg-green-50 hover:bg-green-100 text-green-700"
-                            }`}
-                          >
-                            <CreditCard className="w-3 h-3" />
-                            <span>ເກັບ</span>
-                          </button>
-                        ) : (
-                          <button
-                            onClick={() => handlePrintReceipt(payment)}
-                            className="flex items-center space-x-1 px-3 py-1 bg-blue-50 hover:bg-blue-100 text-blue-700 rounded-lg transition-colors text-xs font-medium"
-                          >
-                            <Printer className="w-3 h-3" />
-                            <span>ພິມ</span>
-                          </button>
-                        )}
-                      </td>
-                    </tr>
-                  );
-                })}
-              </tbody>
-            </table>
-          </div>
-        ) : (
-          /* Tenant View */
-          <div className="divide-y divide-gray-200">
-            {groupedPayments.map((group) => (
-              <div key={group.tenant.tenantId}>
-                <div 
-                  className="flex items-center justify-between p-4 hover:bg-gray-50 cursor-pointer"
-                  onClick={() => toggleTenantExpansion(group.tenant.tenantId)}
-                >
-                  <div className="flex items-center space-x-3">
-                    {expandedTenants.has(group.tenant.tenantId) ? (
-                      <ChevronDown className="w-4 h-4 text-gray-400" />
-                    ) : (
-                      <ChevronRight className="w-4 h-4 text-gray-400" />
-                    )}
-                    <div>
-                      <div className="font-medium text-gray-900">{group.tenant.tenantName}</div>
-                      <div className="text-sm text-gray-500">
-                        {group.payments.length} ພື້ນທີ່
-                        {group.overdueCount > 0 && (
-                          <span className="ml-2 px-2 py-1 bg-red-100 text-red-800 rounded-full text-xs">
-                            {group.overdueCount} ເກີນກຳນົດ
-                          </span>
-                        )}
+                        <span className="ml-2">{space?.spaceType}</span>
                       </div>
                     </div>
                   </div>
-                  <div className="text-right">
-                    <div className="font-bold text-gray-900">₭{group.totalDue.toLocaleString()}</div>
-                    <div className="text-sm text-gray-500">ລວມທັງໝົດ</div>
+                  
+                  <div className="flex items-center space-x-4">
+                    <div className="text-right">
+                      <div className="font-medium text-gray-900">₭{totalAmount.toLocaleString()}</div>
+                      <div className="text-xs text-gray-500">
+                        {new Date(payment.dueDate).toLocaleDateString("lo-LA")}
+                      </div>
+                    </div>
+                    
+                    {activeTimeTab === "future" ? (
+                      <div className="text-xs text-gray-400">
+                        <span>ຍັງບໍ່ເຖິງເວລາ</span>
+                      </div>
+                    ) : (
+                      <button
+                        onClick={() => handleCollectPayment(payment)}
+                        className={`flex items-center space-x-1 px-3 py-1 rounded-lg transition-colors text-xs font-medium ${
+                          payment.status === 'overdue'
+                            ? "bg-red-50 hover:bg-red-100 text-red-700"
+                            : "bg-green-50 hover:bg-green-100 text-green-700"
+                        }`}
+                      >
+                        <CreditCard className="w-3 h-3" />
+                        <span>ເກັບ</span>
+                      </button>
+                    )}
                   </div>
                 </div>
-
-                {expandedTenants.has(group.tenant.tenantId) && (
-                  <div className="bg-gray-50 px-4">
-                    {group.payments.map((payment) => {
-                      const space = spaces.find(s => 
-                         s.id === payment.spaceId || s.id === payment.roomId
-                      );
-                      const originalAmount = payment.originalAmount || getPaymentAmount(payment);
-                      const totalAmount = originalAmount + (payment.lateFee || 0);
-
-                      return (
-                        <div key={payment.id || payment.paymentId} className="flex items-center justify-between py-3 border-b border-gray-200 last:border-b-0">
-                          <div className="flex items-center space-x-3">
-                            {getStatusIcon(payment)}
-                            <div>
-                              <div className="font-medium text-gray-900">{space?.spaceCode}</div>
-                              <div className="text-xs text-gray-500">
-                                <span className={`px-2 py-1 rounded-full ${getFrequencyColor(payment.paymentType)}`}>
-                                  {getFrequencyText(payment.paymentType)}
-                                </span>
-                                <span className="ml-2">{space?.spaceType}</span>
-                              </div>
-                            </div>
-                          </div>
-                          
-                          <div className="flex items-center space-x-4">
-                            <div className="text-right">
-                              <div className="font-medium text-gray-900">₭{totalAmount.toLocaleString()}</div>
-                              <div className="text-xs text-gray-500">
-                                {new Date(payment.dueDate).toLocaleDateString("lo-LA")}
-                              </div>
-                            </div>
-                            
-                            {payment.status !== "paid" ? (
-                              <button
-                                onClick={() => handleCollectPayment(payment)}
-                                className={`flex items-center space-x-1 px-3 py-1 rounded-lg transition-colors text-xs font-medium ${
-                                  payment.status === 'overdue'
-                                    ? "bg-red-50 hover:bg-red-100 text-red-700"
-                                    : "bg-green-50 hover:bg-green-100 text-green-700"
-                                }`}
-                              >
-                                <CreditCard className="w-3 h-3" />
-                                <span>ເກັບ</span>
-                              </button>
-                            ) : (
-                              <button
-                                onClick={() => handlePrintReceipt(payment)}
-                                className="flex items-center space-x-1 px-3 py-1 bg-blue-50 hover:bg-blue-100 text-blue-700 rounded-lg transition-colors text-xs font-medium"
-                              >
-                                <Printer className="w-3 h-3" />
-                                <span>ພິມ</span>
-                              </button>
-                            )}
-                          </div>
-                        </div>
-                      );
-                    })}
-                  </div>
-                )}
-              </div>
-            ))}
+              );
+            })}
           </div>
         )}
+      </div>
+    ))}
+  </div>
+)}
 
         {(viewMode === "list" ? filteredPayments : groupedPayments).length === 0 && (
           <div className="text-center py-12">
@@ -808,7 +799,7 @@ const getStatusText = (payment: Payment) => {
         )}
       </div>
 
-      {/* Modals */}
+      {/* Payment Modal */}
       <PaymentModal
         isOpen={isPaymentModalOpen}
         payment={selectedPayment}
@@ -821,16 +812,15 @@ const getStatusText = (payment: Payment) => {
         onSubmit={handlePaymentCollectedFromModal}
       />
 
-      {isReceiptModalOpen && selectedPayment && (
-        <ReceiptModal
-          isOpen={isReceiptModalOpen}
-          payment={selectedPayment}
-          onClose={() => {
-            setIsReceiptModalOpen(false);
-            setSelectedPayment(null);
-          }}
-        />
-      )}
+      {/* Bulk Payment Modal */}
+      <BulkPaymentModal
+        isOpen={isBulkPaymentModalOpen}
+        payments={payments}
+        spaces={spaces}
+        tenants={tenants}
+        onClose={() => setIsBulkPaymentModalOpen(false)}
+        onSubmit={handleBulkPaymentSubmit}
+      />
     </div>
   );
 };
