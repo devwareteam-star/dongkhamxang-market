@@ -18,6 +18,7 @@ import TenantManagement from '@/components/Tenants/TenantManagement';
 // import NotificationCenter from '@/components/Notifications/NotificationCenter';
 import EmployeeSchedule from '@/components/Schedule/EmployeeSchedule';
 import SpaceLayoutDashboard from '@/components/SpaceDragDrop/SpaceDragDrop';
+import PaymentCollectionDashboard from '@/components/EmployeePaymentCollection/PaymentCollectionDashboard';
 
 export default function Home() {
   const { user, isLoading } = useAuth();
@@ -100,6 +101,9 @@ case 'space-layout':
       
       case 'search':
         return hasPermission('spaces', 'read') ? <RoomSearch /> : <AccessDenied />;
+
+      case 'payment-collection':
+        return hasPermission('payments', 'read') ? <PaymentCollectionDashboard /> : <AccessDenied />;
       
       case 'schedule':
         return <EmployeeSchedule />; // All users can see their schedule

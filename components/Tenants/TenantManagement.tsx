@@ -326,7 +326,7 @@ const TenantManagement: React.FC = () => {
                   <div className="flex flex-wrap gap-1">
                     {tenantSpaces.slice(0, 3).map((space) => (
                       <span
-                        key={space.spaceId}
+                        key={space.id}
                         className="px-2 py-1 bg-blue-100 text-blue-700 text-xs rounded"
                       >
                         {space.spaceCode} ({space.zone})

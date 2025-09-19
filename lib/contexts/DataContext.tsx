@@ -872,7 +872,7 @@ const processLateFees = async (paymentsToProcess = payments) => {
           }...`
         );
 
-        await updatePayment(payment.paymentId || payment.id, updateData);
+        await updatePayment(payment.paymentId || payment.id, updateData, payment);
 
         console.log(
           `✅ DEBUG: Successfully updated payment ${
@@ -1368,10 +1368,15 @@ const processLateFees = async (paymentsToProcess = payments) => {
   };
 
   // This function is like a bank teller who needs to update a bill, but has special handling when someone actually pays it. Step 1: Find the payment, Step 2: Check if marking as paid & Step 3A: If paid - move to different collection || Step 3B: If not paid - regular update Strip legacy fields, map field names, update database, update local state.
-const updatePayment = async (id: string, paymentUpdate: Partial<Payment>) => {
+const updatePayment = async (
+  id: string, 
+  paymentUpdate: Partial<Payment>,
+  providedPayment?: Payment  // Optional payment object
+) => {
   try {
     // Find the current payment first
-    const currentPayment = payments.find(p => (p.paymentId || p.id) === id);
+    let currentPayment = providedPayment || 
+                        payments.find(p => (p.paymentId || p.id) === id);
     if (!currentPayment) {
       throw new Error("Payment not found");
     }

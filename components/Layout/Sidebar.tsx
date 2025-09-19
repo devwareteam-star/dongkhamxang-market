@@ -42,7 +42,7 @@ const unreadNotifications = notifications.filter(n =>
     { id: 'receipts', label: 'ໃບຮັບເງິນ', icon: Receipt },
     { id: 'reports', label: 'ລາຍງານ', icon: BarChart3 },
     // { id: 'notifications', label: 'ການແຈ້ງເຕືອນ', icon: Bell, badge: unreadNotifications },
-    { id: 'users', label: 'ຈັດການຜູ້ໃຊ້', icon: Users },
+    // { id: 'users', label: 'ຈັດການຜູ້ໃຊ້', icon: Users },
     { id: 'settings', label: 'ຕັ້ງຄ່າລະບົບ', icon: Settings },
   ];
 
@@ -51,6 +51,7 @@ const unreadNotifications = notifications.filter(n =>
     { id: 'collect-payment', label: 'ເກັບເງິນຄ່າເຊົ່າ', icon: CreditCard },
     { id: 'receipts', label: 'ໃບຮັບເງິນ', icon: Receipt },
     { id: 'search', label: 'ຄົ້ນຫາຫ້ອງ', icon: Search },
+    { id: 'payment-collection', label: 'ການຊຳລະເງິນ', icon: CreditCard },
     { id: 'schedule', label: 'ຕາຕະລາງການ', icon: Calendar },
     // { id: 'notifications', label: 'ການແຈ້ງເຕືອນ', icon: Bell, badge: unreadNotifications },
   ];

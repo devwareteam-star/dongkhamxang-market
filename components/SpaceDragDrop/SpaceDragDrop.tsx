@@ -4,20 +4,20 @@ import { useData } from '@/lib/contexts/DataContext';
 import { DndContext, DragEndEvent, DragStartEvent, DragOverlay, useDraggable, useDroppable } from '@dnd-kit/core';
 import { Space } from '@/types';
 import { CSS } from '@dnd-kit/utilities';
-import { Building2, Home, Clipboard, Package, CheckCircle, Clock, AlertTriangle, AlertCircle, LucideIcon, Edit3 } from 'lucide-react';
+import { Building2, Home, Clipboard, Package, Edit3 } from 'lucide-react';
 import SpaceDragDropModal from './SpaceDragDropModal';
 
 // Constants - Adjust these to change all space sizes globally
-const SPACE_WIDTH = 60; // All spaces will be this width
-const SPACE_HEIGHT = 60; // All spaces will be this height
-const GRID_SIZE = Math.min(SPACE_WIDTH, SPACE_HEIGHT); // Grid size based on smallest dimension
+const SPACE_WIDTH = 60;
+const SPACE_HEIGHT = 60;
+const GRID_SIZE = Math.min(SPACE_WIDTH, SPACE_HEIGHT);
 const SPACE_MARGIN = 4;
 
 // Interface definitions
 interface SpaceTypeConfig {
   key: Space['spaceType'];
   label: string;
-  icon: LucideIcon;
+  icon: React.ComponentType<{ className?: string }>;
 }
 
 interface SpaceItemProps {
@@ -100,7 +100,7 @@ const SpaceLayoutDashboard: React.FC = () => {
   const [selectedSpace, setSelectedSpace] = useState<Space | null>(null);
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [isEditMode, setIsEditMode] = useState(false);
-  const { spaces, updateSpace, payments, tenants, updatePayment, generateReceiptNumber, loading } = useData();
+  const { spaces, updateSpace, loading } = useData();
   const { width: CANVAS_WIDTH, height: CANVAS_HEIGHT } = useResponsiveCanvas();
 
   // Modal handlers
@@ -132,16 +132,6 @@ const SpaceLayoutDashboard: React.FC = () => {
       console.error('Failed to update space status:', error);
     }
   };
-
-  const handlePaymentCollected = async (paymentData: any) => {
-  try {
-    // Handle payment collection logic here
-    console.log('Payment collected:', paymentData);
-    // You might want to refresh data or show a success message
-  } catch (error) {
-    console.error('Failed to process payment:', error);
-  }
-};
 
   if (loading) {
     return (
@@ -275,40 +265,32 @@ const SpaceLayoutDashboard: React.FC = () => {
         </div>
       </div>
 
-      {/* Payment Status Legend */}
-<div className="bg-white border-b border-gray-200 px-6 py-3">
-  <div className="flex items-center justify-between">
-    <div className="flex items-center space-x-6 text-sm">
-      <span className="text-gray-600 font-medium">Payment Status:</span>
-      <div className="flex items-center space-x-1">
-        <div className="w-3 h-3 bg-green-500 rounded-full"></div>
-        <span className="text-gray-700">Paid</span>
+      {/* Space Status Legend */}
+      <div className="bg-white border-b border-gray-200 px-6 py-3">
+        <div className="flex items-center justify-between">
+          <div className="flex items-center space-x-6 text-sm">
+            <span className="text-gray-600 font-medium">Space Status:</span>
+            <div className="flex items-center space-x-1">
+              <div className="w-3 h-3 bg-blue-500 rounded-full"></div>
+              <span className="text-gray-700">Rented</span>
+            </div>
+            <div className="flex items-center space-x-1">
+              <div className="w-3 h-3 bg-gray-400 rounded-full"></div>
+              <span className="text-gray-700">Vacant</span>
+            </div>
+            <div className="flex items-center space-x-1">
+              <div className="w-3 h-3 bg-orange-500 rounded-full"></div>
+              <span className="text-gray-700">Maintenance</span>
+            </div>
+          </div>
+        </div>
       </div>
-      <div className="flex items-center space-x-1">
-        <div className="w-3 h-3 bg-yellow-500 rounded-full"></div>
-        <span className="text-gray-700">Pending</span>
-      </div>
-      <div className="flex items-center space-x-1">
-        <div className="w-3 h-3 bg-red-500 rounded-full"></div>
-        <span className="text-gray-700">Overdue</span>
-      </div>
-      <div className="flex items-center space-x-1">
-        <div className="w-3 h-3 bg-gray-400 rounded-full"></div>
-        <span className="text-gray-700">Vacant</span>
-      </div>
-      <div className="flex items-center space-x-1">
-        <div className="w-3 h-3 bg-orange-500 rounded-full"></div>
-        <span className="text-gray-700">Maintenance</span>
-      </div>
-    </div>
-  </div>
-</div>
 
       {/* Edit Mode Indicator */}
       {isEditMode && (
         <div className="bg-yellow-50 border-b border-yellow-200 px-6 py-2">
           <div className="flex items-center space-x-2 text-yellow-800">
-            <AlertTriangle className="w-4 h-4" />
+            <Edit3 className="w-4 h-4" />
             <span className="text-sm font-medium">Edit Mode Active - Drag spaces to reposition them</span>
           </div>
         </div>
@@ -345,7 +327,7 @@ const SpaceLayoutDashboard: React.FC = () => {
         </div>
       </div>
 
-      {/* Main Content - Conditionally wrapped with DndContext */}
+      {/* Main Content */}
       {isEditMode ? (
         <DndContext onDragStart={handleDragStart} onDragEnd={handleDragEnd}>
           {mainContent}
@@ -375,9 +357,6 @@ const SpaceLayoutDashboard: React.FC = () => {
         space={selectedSpace}
         onEdit={handleEditSpace}
         onStatusChange={handleStatusChange}
-        payments={payments}
-  tenants={tenants}
-  onPaymentCollected={handlePaymentCollected}
       />
     </div>
   );
@@ -515,7 +494,7 @@ const SidebarDropZone: React.FC<SidebarDropZoneProps> = ({
     >
       {unpositionedSpaces.length === 0 ? (
         <div className="text-center text-gray-400 py-8">
-          <CheckCircle className="w-8 h-8 mx-auto mb-2" />
+          <Package className="w-8 h-8 mx-auto mb-2" />
           <p className="font-medium">All Positioned</p>
           <p className="text-sm">All spaces have been positioned</p>
         </div>
@@ -587,38 +566,16 @@ const SpaceItem: React.FC<SpaceItemProps> = ({
   onClick, 
   isEditMode = false 
 }) => {
-  const getPaymentStatusColor = (space: Space): string => {
-  // If no tenant, use gray
-  if (space.status === 'vacant' || !space.currentTenantId) {
-    return 'bg-gray-400';
-  }
-  
-  // If maintenance, use orange regardless of payment status
-  if (space.status === 'maintainance') {
-    return 'bg-orange-500';
-  }
-  
-  // Use payment status for occupied spaces
-  const paymentStatus = space.paymentStatus?.currentStatus;
-  switch (paymentStatus) {
-    case 'paid': return 'bg-green-500';      // Green = paid
-    case 'pending': return 'bg-yellow-500';   // Yellow = pending  
-    case 'overdue': return 'bg-red-500';      // Red = overdue
-    default: return 'bg-blue-500';            // Blue = unknown/default
-  }
-};
-
-const statusColor = getPaymentStatusColor(space);
-
-  const getPaymentIcon = (): React.ReactNode => {
-    const status = space.paymentStatus?.currentStatus;
-    switch (status) {
-      case 'paid': return <CheckCircle className="w-3 h-3 text-green-600" />;
-      case 'pending': return <AlertTriangle className="w-3 h-3 text-yellow-600" />;
-      case 'overdue': return <AlertCircle className="w-3 h-3 text-red-600" />;
-      default: return <Clock className="w-3 h-3 text-gray-500" />;
+  const getStatusColor = (space: Space): string => {
+    switch (space.status) {
+      case 'vacant': return 'bg-gray-400';
+      case 'rented': return 'bg-blue-500';
+      case 'maintainance': return 'bg-orange-500';
+      default: return 'bg-gray-400';
     }
   };
+
+  const statusColor = getStatusColor(space);
 
   const getPaymentFrequencyDisplay = (): string => {
     switch (space.paymentFrequency) {
@@ -677,11 +634,6 @@ const statusColor = getPaymentStatusColor(space);
         </div>
       </div>
       
-      {/* Payment Status Icon */}
-      <div className="absolute -top-1 -right-1 bg-white rounded-full p-0.5 shadow-sm pointer-events-none">
-        {getPaymentIcon()}
-      </div>
-
       {/* Status Indicator */}
       <div className="absolute -top-1 -left-1 w-3 h-3 rounded-full bg-white shadow-sm flex items-center justify-center pointer-events-none">
         <div className={`w-2 h-2 rounded-full ${statusColor}`}></div>
