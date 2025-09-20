@@ -151,12 +151,12 @@ const TenantManagement: React.FC = () => {
                           searchTerm.trim() !== '';
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-4 md:space-y-6 p-4 md:p-0">
       {/* Header */}
-      <div className="flex justify-between items-center">
+      <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
         <div>
-          <h1 className="text-3xl font-bold text-gray-900">ຈັດການຜູ້ເຊົ່າ</h1>
-          <p className="text-gray-600 mt-1">
+          <h1 className="text-2xl md:text-3xl font-bold text-gray-900">ຈັດການຜູ້ເຊົ່າ</h1>
+          <p className="text-gray-600 mt-1 text-sm md:text-base">
             ຈັດການຂໍ້ມູນຜູ້ເຊົ່າທັງໝົດ {tenants.length} ຄົນ
             {hasActiveFilters && ` (ສະແດງ ${filteredTenants.length} ຄົນ)`}
           </p>
@@ -164,10 +164,10 @@ const TenantManagement: React.FC = () => {
         <button
           onClick={handleAddTenant}
           disabled={isSubmitting}
-          className="flex items-center space-x-2 bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg transition-colors disabled:opacity-50"
+          className="flex items-center space-x-2 bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg transition-colors w-full sm:w-auto justify-center"
         >
           <Plus className="w-5 h-5" />
-          <span>ເພີ່ມຜູ້ເຊົ່າໃໝ່</span>
+          <span className="text-sm md:text-base">ເພີ່ມຜູ້ເຊົ່າໃໝ່</span>
         </button>
       </div>
 
