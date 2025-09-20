@@ -28,12 +28,13 @@ const PaymentCollection: React.FC = () => {
     updatePayment, 
     generateReceiptNumber,
     generatePaymentsForAllTenants,
+    handleBulkPayments,
     loading 
   } = useData();
   const { user } = useAuth();
 
   // Clean up duplicate data
-  const { cleanupDuplicatePayments } = useData();
+  const { cleanupDuplicatePayments} = useData();
   const [isCleaningUp, setIsCleaningUp] = useState(false);
   
   // New state for enhanced UI
@@ -256,30 +257,22 @@ const PaymentCollection: React.FC = () => {
   };
 
   const handleBulkPaymentSubmit = async (data: {
-    payments: Payment[];
-    paymentMethod: 'cash' | 'transfer';
-    notes?: string;
-  }) => {
-    try {
-      for (const payment of data.payments) {
-        const receiptNumber = generateReceiptNumber();
-        await updatePayment(payment.id, {
-          paymentStatus: 'paid',
-          paymentDate: new Date(),
-          paymentMethod: data.paymentMethod,
-          receiptNumber,
-          processedBy: user?.id,
-          notes: data.notes || undefined
-        });
-      }
-      
-      setIsBulkPaymentModalOpen(false);
-      alert(`ເກັບເງິນສຳເລັດແລ້ວ ${data.payments.length} ລາຍການ`);
-    } catch (error) {
-      console.error("Error processing bulk payments:", error);
-      alert("ເກີດຂໍ້ຜິດພາດໃນການເກັບເງິນຫຼາຍ");
-    }
-  };
+  payments: Payment[];
+  paymentMethod: 'cash' | 'transfer';
+  notes?: string;
+  paymentImage?: File;
+}) => {
+  try {
+    // Use the new handleBulkPayments method from DataContext that supports images
+    const processedPayments = await handleBulkPayments(data);
+    
+    setIsBulkPaymentModalOpen(false);
+    alert(`ເກັບເງິນສຳເລັດແລ້ວ ${processedPayments.length} ລາຍການ`);
+  } catch (error) {
+    console.error("Error processing bulk payments:", error);
+    alert("ເກີດຂໍ້ຜິດພາດໃນການເກັບເງິນຫຼາຍ");
+  }
+};
 
   // Status helpers
   const getStatusIcon = (payment: Payment) => {

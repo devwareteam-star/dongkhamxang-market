@@ -96,6 +96,8 @@ export interface Payment {
   paymentDate?: Date;
   paymentMethod?: 'cash' | 'transfer' | undefined;
   paymentStatus: 'pending' | 'paid' | 'overdue' | 'partial' | undefined;
+  paymentImageUrl?: string; // Firebase Storage download URL
+  paymentImagePath?: string; // Firebase Storage path (for deletion)
 
     // Late fee structure fields (add these)
   originalAmount: number;        // Base rent amount (never changes)

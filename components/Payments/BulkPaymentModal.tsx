@@ -1,7 +1,7 @@
 'use client';
 
 import React, { useState, useEffect } from 'react';
-import { X, CreditCard, Users, List, CheckSquare, Square, Banknote, Smartphone } from 'lucide-react';
+import { X, CreditCard, Users, List, CheckSquare, Square, Banknote, Smartphone, Camera, Upload, Image } from 'lucide-react';
 import { Payment, Space, Tenant } from '@/types';
 
 interface BulkPaymentModalProps {
@@ -11,6 +11,7 @@ interface BulkPaymentModalProps {
     payments: Payment[];
     paymentMethod: 'cash' | 'transfer';
     notes?: string;
+    paymentImage?: File; // File object for upload
   }) => Promise<void>;
   payments: Payment[];
   spaces: Space[];
@@ -32,6 +33,10 @@ const BulkPaymentModal: React.FC<BulkPaymentModalProps> = ({
   const [expandedTenants, setExpandedTenants] = useState<Set<string>>(new Set());
   const [paymentMethod, setPaymentMethod] = useState<'cash' | 'transfer'>('cash');
   const [notes, setNotes] = useState('');
+  const [paymentImage, setPaymentImage] = useState<File | null>(null);
+  const [imagePreview, setImagePreview] = useState<string | null>(null);
+  const [isUploading, setIsUploading] = useState(false); // ADD THIS
+const [uploadProgress, setUploadProgress] = useState(0); // ADD THIS
 
   // Filter payments by type and exclude future payments
   const filteredPayments = selectedPaymentType 
@@ -117,14 +122,19 @@ const BulkPaymentModal: React.FC<BulkPaymentModalProps> = ({
     }, 0);
   };
 
-  const handleSubmit = async () => {
-    const selectedPaymentsData = getSelectedPaymentsData();
-    if (selectedPaymentsData.length === 0) return;
+const handleSubmit = async () => {
+  const selectedPaymentsData = getSelectedPaymentsData();
+  if (selectedPaymentsData.length === 0) return;
+
+  try {
+    setIsUploading(true); // START LOADING
+    setUploadProgress(0);
 
     await onSubmit({
       payments: selectedPaymentsData,
       paymentMethod,
-      notes: notes.trim() || undefined
+      notes: notes.trim() || undefined,
+      paymentImage: paymentImage || undefined
     });
 
     // Reset state
@@ -135,7 +145,13 @@ const BulkPaymentModal: React.FC<BulkPaymentModalProps> = ({
     setExpandedTenants(new Set());
     setPaymentMethod('cash');
     setNotes('');
-  };
+    setPaymentImage(null);
+    setImagePreview(null);
+  } finally {
+    setIsUploading(false); // STOP LOADING
+    setUploadProgress(0);
+  }
+};
 
   const resetModal = () => {
     setStep(1);
@@ -145,6 +161,8 @@ const BulkPaymentModal: React.FC<BulkPaymentModalProps> = ({
     setExpandedTenants(new Set());
     setPaymentMethod('cash');
     setNotes('');
+    setPaymentImage(null);
+    setImagePreview(null);
   };
 
   const handleClose = () => {
@@ -161,6 +179,43 @@ const BulkPaymentModal: React.FC<BulkPaymentModalProps> = ({
       case 'yearly': return 'ລາຍປີ';
       default: return type;
     }
+  };
+
+  const handleImageUpload = (event: React.ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    if (file) {
+      setPaymentImage(file);
+      const reader = new FileReader();
+      reader.onload = (e) => {
+        setImagePreview(e.target?.result as string);
+      };
+      reader.readAsDataURL(file);
+    }
+  };
+
+  const handleCameraCapture = () => {
+    // Create file input for camera
+    const input = document.createElement('input');
+    input.type = 'file';
+    input.accept = 'image/*';
+    input.capture = 'environment'; // Use rear camera
+    input.onchange = (e) => {
+      const file = (e.target as HTMLInputElement).files?.[0];
+      if (file) {
+        setPaymentImage(file);
+        const reader = new FileReader();
+        reader.onload = (e) => {
+          setImagePreview(e.target?.result as string);
+        };
+        reader.readAsDataURL(file);
+      }
+    };
+    input.click();
+  };
+
+  const removeImage = () => {
+    setPaymentImage(null);
+    setImagePreview(null);
   };
 
   return (
@@ -200,7 +255,7 @@ const BulkPaymentModal: React.FC<BulkPaymentModalProps> = ({
                   >
                     <div className="text-lg font-medium">{getPaymentTypeText(type)}</div>
                     <div className="text-sm text-gray-500 mt-1">
-                       {payments.filter(p => {
+                      {payments.filter(p => {
                         if (p.paymentType !== type || p.status === 'paid') return false;
                         
                         // Only count overdue and current payments (exclude future)
@@ -289,7 +344,7 @@ const BulkPaymentModal: React.FC<BulkPaymentModalProps> = ({
               <div className="max-h-96 overflow-y-auto border rounded-lg">
                 {selectionMethod === 'tenant' ? (
                   // Tenant grouped view
-                 <div className="divide-y">
+                  <div className="divide-y">
                     {groupedPayments.map((group) => {
                       const tenantPaymentIds = group.payments.map(p => p.id || p.paymentId).filter(Boolean);
                       const selectedCount = tenantPaymentIds.filter(id => selectedPayments.has(id)).length;
@@ -318,34 +373,27 @@ const BulkPaymentModal: React.FC<BulkPaymentModalProps> = ({
                               >
                                 <div className="font-medium text-gray-900">{group.tenant.tenantName}</div>
                                 <div className="text-sm text-gray-500">
-  {(() => {
-    const today = new Date();
-    const todayStart = new Date(today.getFullYear(), today.getMonth(), today.getDate());
-    const todayEnd = new Date(todayStart);
-    todayEnd.setDate(todayEnd.getDate() + 1);
-
-    const overdueCount = group.payments.filter(p => {
-      const dueDate = new Date(p.dueDate);
-      return dueDate < todayStart;
-    }).length;
-
-    const currentCount = group.payments.filter(p => {
-      const dueDate = new Date(p.dueDate);
-      return dueDate >= todayStart && dueDate < todayEnd;
-    }).length;
-
-    const totalCollectible = overdueCount + currentCount;
-
-    return (
-      <>
-        {`${totalCollectible} ລາຍການ • ₭${group.totalAmount.toLocaleString()}`}
-        {overdueCount > 0 && (
-          <span className="text-red-500"> • {overdueCount} ເກີນກຳນົດ</span>
-        )}
-      </>
-    );
-  })()}
-</div>
+                                  {(() => {
+                                    const today = new Date();
+                                    const todayStart = new Date(today.getFullYear(), today.getMonth(), today.getDate());
+                                    const todayEnd = new Date(todayStart);
+                                    todayEnd.setDate(todayEnd.getDate() + 1);
+                                    
+                                    const overdueCount = group.payments.filter(p => {
+                                      const dueDate = new Date(p.dueDate);
+                                      return dueDate < todayStart;
+                                    }).length;
+                                    
+                                    const currentCount = group.payments.filter(p => {
+                                      const dueDate = new Date(p.dueDate);
+                                      return dueDate >= todayStart && dueDate < todayEnd;
+                                    }).length;
+                                    
+                                    const totalCollectible = overdueCount + currentCount;
+                                    
+                                    return `${totalCollectible} ລາຍການ • ₭${group.totalAmount.toLocaleString()} • ${overdueCount} ເກີນກຳນົດ | ${currentCount} ປັດຈຸບັນ`;
+                                  })()}
+                                </div>
                               </button>
                             </div>
                             <div className="text-sm text-blue-600">
@@ -360,6 +408,12 @@ const BulkPaymentModal: React.FC<BulkPaymentModalProps> = ({
                                 const paymentId = payment.id || payment.paymentId;
                                 const isSelected = selectedPayments.has(paymentId);
                                 const totalAmount = (payment.amount || 0) + (payment.lateFee || 0);
+                                
+                                // Check if payment is overdue
+                                const today = new Date();
+                                const todayStart = new Date(today.getFullYear(), today.getMonth(), today.getDate());
+                                const dueDate = new Date(payment.dueDate);
+                                const isOverdue = dueDate < todayStart;
 
                                 return (
                                   <div key={paymentId} className="flex items-center space-x-3 py-2">
@@ -370,13 +424,22 @@ const BulkPaymentModal: React.FC<BulkPaymentModalProps> = ({
                                         <Square className="w-4 h-4 text-gray-400" />
                                       )}
                                     </button>
-                                    <div className="flex-1">
-                                      <div className="font-medium text-sm">{space?.spaceCode}</div>
-                                      <div className="text-xs text-gray-500">
-                                        ₭{totalAmount.toLocaleString()}
-                                        {payment.lateFee && payment.lateFee > 0 && (
-                                          <span className="text-red-500 ml-1">(+ຄ່າປັບ)</span>
+                                    <div className="flex-1 flex items-center justify-between">
+                                      <div className="flex items-center space-x-2">
+                                        <div className="font-medium text-sm">{space?.spaceCode}</div>
+                                        {isOverdue && (
+                                          <span className="px-2 py-1 text-xs bg-red-100 text-red-700 rounded-full">
+                                            ເກີນກຳນົດ
+                                          </span>
                                         )}
+                                      </div>
+                                      <div className="text-right">
+                                        <div className="text-xs text-gray-500">
+                                          ₭{totalAmount.toLocaleString()}
+                                          {payment.lateFee && payment.lateFee > 0 && (
+                                            <span className="text-red-500 ml-1">(+ຄ່າປັບ)</span>
+                                          )}
+                                        </div>
                                       </div>
                                     </div>
                                   </div>
@@ -411,11 +474,7 @@ const BulkPaymentModal: React.FC<BulkPaymentModalProps> = ({
                             <div className="flex items-center justify-between">
                               <div>
                                 <div className="font-medium text-gray-900">
-                                  {space?.spaceCode} - {tenant?.tenantName} -  {payment.lateFeeApplied && (
-  <span style={{ color: "red", fontWeight: "bold" }}>
-    ກາຍມື້
-  </span>
-)}
+                                  {space?.spaceCode} - {tenant?.tenantName}
                                 </div>
                                 <div className="text-sm text-gray-500">
                                   {space?.spaceType} • {new Date(payment.dueDate).toLocaleDateString('lo-LA')}
@@ -576,20 +635,120 @@ const BulkPaymentModal: React.FC<BulkPaymentModalProps> = ({
                 />
               </div>
 
-              <div className="flex justify-between">
-                <button
-                  onClick={() => setStep(3)}
-                  className="px-6 py-2 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50"
-                >
-                  ກັບຄືນ
-                </button>
-                <button
-                  onClick={handleSubmit}
-                  className="px-6 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 font-medium"
-                >
-                  ຢືນຢັນການເກັບເງິນ ({selectedPayments.size} ລາຍການ)
-                </button>
+              {/* Payment Image Upload */}
+              <div className="mb-6">
+                <label className="block text-sm font-medium text-gray-700 mb-3">
+                  ຮູບພາບການຊຳລະ (ບໍ່ບັງຄັບ)
+                </label>
+                
+                {!imagePreview ? (
+                  <div className="grid grid-cols-2 gap-3">
+                    <button
+                      type="button"
+                      onClick={handleCameraCapture}
+                      className="flex flex-col items-center justify-center p-6 border-2 border-dashed border-gray-300 rounded-lg hover:border-gray-400 transition-colors"
+                    >
+                      <Camera className="w-8 h-8 text-gray-400 mb-2" />
+                      <span className="text-sm font-medium text-gray-600">ຖ່າຍຮູບ</span>
+                      <span className="text-xs text-gray-500 mt-1">ເປີດກ້ອງຖ່າຍຮູບ</span>
+                    </button>
+                    
+                    <label className="flex flex-col items-center justify-center p-6 border-2 border-dashed border-gray-300 rounded-lg hover:border-gray-400 transition-colors cursor-pointer">
+                      <Upload className="w-8 h-8 text-gray-400 mb-2" />
+                      <span className="text-sm font-medium text-gray-600">ອັບໂຫຼດ</span>
+                      <span className="text-xs text-gray-500 mt-1">ເລືອກຈາກອຸປະກອນ</span>
+                      <input
+                        type="file"
+                        accept="image/*"
+                        onChange={handleImageUpload}
+                        className="hidden"
+                      />
+                    </label>
+                  </div>
+                ) : (
+                  <div className="relative">
+                    <div className="border-2 border-gray-200 rounded-lg p-4 bg-gray-50">
+                      <div className="flex items-center space-x-4">
+                        <div className="flex-shrink-0">
+                          <img
+                            src={imagePreview}
+                            alt="Payment proof"
+                            className="w-16 h-16 object-cover rounded-lg border border-gray-300"
+                          />
+                        </div>
+                        <div className="flex-1">
+                          <div className="flex items-center space-x-2">
+                            <Image className="w-4 h-4 text-green-600" />
+                            <span className="text-sm font-medium text-gray-900">
+                              {paymentImage?.name || 'ຮູບພາບການຊຳລະ'}
+                            </span>
+                          </div>
+                          <p className="text-xs text-gray-500 mt-1">
+                            {paymentImage && `${(paymentImage.size / 1024).toFixed(1)} KB`}
+                          </p>
+                        </div>
+                        <button
+                          type="button"
+                          onClick={removeImage}
+                          className="p-2 text-red-600 hover:bg-red-50 rounded-lg transition-colors"
+                        >
+                          <X className="w-4 h-4" />
+                        </button>
+                      </div>
+                    </div>
+                    
+                    {/* Replace image options */}
+                    <div className="mt-3 flex space-x-2">
+                      <button
+                        type="button"
+                        onClick={handleCameraCapture}
+                        className="flex items-center space-x-1 px-3 py-2 text-sm bg-gray-100 hover:bg-gray-200 rounded-lg transition-colors"
+                      >
+                        <Camera className="w-4 h-4" />
+                        <span>ຖ່າຍໃໝ່</span>
+                      </button>
+                      <label className="flex items-center space-x-1 px-3 py-2 text-sm bg-gray-100 hover:bg-gray-200 rounded-lg transition-colors cursor-pointer">
+                        <Upload className="w-4 h-4" />
+                        <span>ເລືອກໃໝ່</span>
+                        <input
+                          type="file"
+                          accept="image/*"
+                          onChange={handleImageUpload}
+                          className="hidden"
+                        />
+                      </label>
+                    </div>
+                  </div>
+                )}
+                
+                <p className="text-xs text-gray-500 mt-2">
+                  ອັບໂຫຼດຮູບພາບເພື່ອຢືນຢັນການຊຳລະ (ເຊັ່ນ: ໃບເສັດໂອນເງິນ, ເງິນສົດ)
+                </p>
               </div>
+
+              <div className="flex justify-between">
+  <button
+    onClick={() => setStep(3)}
+    disabled={isUploading}
+    className="px-6 py-2 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 disabled:opacity-50"
+  >
+    ກັບຄືນ
+  </button>
+  <button
+    onClick={handleSubmit}
+    disabled={isUploading}
+    className="px-6 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 font-medium disabled:opacity-50 flex items-center space-x-2"
+  >
+    {isUploading ? (
+      <>
+        <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white"></div>
+        <span>ກຳລັງປະມວນຜົນ... {uploadProgress}%</span>
+      </>
+    ) : (
+      <span>ຢືນຢັນການເກັບເງິນ ({selectedPayments.size} ລາຍການ)</span>
+    )}
+  </button>
+</div>
             </div>
           )}
         </div>

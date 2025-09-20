@@ -21,6 +21,7 @@ import {
   usersService,
   notificationsService,
   paidCollectionService,
+  StorageService,
 } from "@/lib/firebase/firestore";
 
 interface DataContextType {
@@ -61,6 +62,13 @@ interface DataContextType {
   ) => Promise<void>;
   updatePayment: (id: string, payment: Partial<Payment>) => Promise<void>;
   deletePayment: (id: string) => Promise<void>;
+  // Add new bulk payment handler
+  handleBulkPayments: (data: {
+    payments: Payment[];
+    paymentMethod: 'cash' | 'transfer';
+    notes?: string;
+    paymentImage?: File;
+  }) => Promise<Payment[]>;
 
   // Bill operations
   addBill: (
@@ -651,11 +659,32 @@ for (const space of tenantSpaces) {
   };
 
   // Step 1: Prepare the data for the "finished" cabinet, Step 2: Put it in the "finished work" cabinet,  Step 3: Remove from "to-do" cabinet & Step 4: Update your memory immediately
-const movePaymentToPaidCollection = async (payment: Payment, updatedData: Partial<Payment>) => {
+const movePaymentToPaidCollection = async (
+  payment: Payment, 
+  updatedData: Partial<Payment>,
+  paymentImage?: File
+) => {
   try {
+    let imageData = {};
+    
+    // Upload image if provided
+    if (paymentImage) {
+      console.log('Uploading payment image...');
+      const { downloadURL, path } = await StorageService.uploadPaymentImage(
+        paymentImage, 
+        payment.paymentId || payment.id
+      );
+      imageData = {
+        paymentImageUrl: downloadURL,
+        paymentImagePath: path
+      };
+      console.log('Payment image uploaded successfully');
+    }
+
     const paidPaymentData = {
       ...payment,
       ...updatedData,
+      ...imageData, // Add image data
       originalPaymentId: payment.paymentId || payment.id,
       movedToPaidAt: new Date(),
     };
@@ -1319,10 +1348,13 @@ const processLateFees = async (paymentsToProcess = payments) => {
   };
 
   // This function is like a bank teller who needs to update a bill, but has special handling when someone actually pays it. Step 1: Find the payment, Step 2: Check if marking as paid & Step 3A: If paid - move to different collection || Step 3B: If not paid - regular update Strip legacy fields, map field names, update database, update local state.
+// Your existing updatePayment method with MINIMAL changes for image support:
+
 const updatePayment = async (
   id: string, 
   paymentUpdate: Partial<Payment>,
-  providedPayment?: Payment  // Optional payment object
+  providedPayment?: Payment,  // Optional payment object
+  paymentImage?: File  // ADD THIS LINE ONLY
 ) => {
   try {
     // Find the current payment first
@@ -1331,6 +1363,26 @@ const updatePayment = async (
     if (!currentPayment) {
       throw new Error("Payment not found");
     }
+
+    // ADD THIS BLOCK FOR IMAGE HANDLING:
+    let imageData = {};
+    if (paymentImage) {
+      console.log('Uploading payment image for update...');
+      const { downloadURL, path } = await StorageService.uploadPaymentImage(
+        paymentImage, 
+        id
+      );
+      imageData = {
+        paymentImageUrl: downloadURL,
+        paymentImagePath: path
+      };
+      
+      // Delete old image if it exists
+      if (currentPayment.paymentImagePath) {
+        await StorageService.deletePaymentImage(currentPayment.paymentImagePath);
+      }
+    }
+    // END OF NEW IMAGE BLOCK
 
     // Check if this update is marking the payment as paid
     const isMarkingAsPaid = (paymentUpdate.paymentStatus === 'paid' || paymentUpdate.status === 'paid') && 
@@ -1345,10 +1397,10 @@ const updatePayment = async (
       
       console.log(`Payment marked as paid for tenant ${tenantId}, frequency: ${paymentFrequency}, space: ${spaceId}`);
 
-      // Move to paid collection instead of updating
-      await movePaymentToPaidCollection(currentPayment, paymentUpdate);
+      // CHANGE THIS LINE TO PASS IMAGE DATA:
+      await movePaymentToPaidCollection(currentPayment, { ...paymentUpdate, ...imageData }, paymentImage);
 
-      // Generate next payment for THIS SPECIFIC SPACE only
+      // YOUR EXISTING NEXT PAYMENT GENERATION CODE STAYS THE SAME:
       if (tenantId && paymentFrequency && spaceId) {
         try {
           console.log(`Generating next ${paymentFrequency} payment for tenant ${tenantId}, space ${spaceId}...`);
@@ -1493,7 +1545,7 @@ const updatePayment = async (
       paidDate,
       paymentType,
       ...firebaseUpdate
-    } = paymentUpdate;
+    } = { ...paymentUpdate, ...imageData }; // ADD ...imageData HERE
 
     // Map English status back to Lao if provided
     if (status) {
@@ -1516,7 +1568,7 @@ const updatePayment = async (
     setPayments((prev) =>
       prev.map((payment) => {
         if (payment.paymentId === id || payment.id === id) {
-          const updatedPayment = { ...payment, ...paymentUpdate };
+          const updatedPayment = { ...payment, ...paymentUpdate, ...imageData }; // ADD ...imageData HERE
           return enhancePaymentWithLegacyFields(
             updatedPayment,
             tenants,
@@ -1533,6 +1585,80 @@ const updatePayment = async (
     throw error;
   }
 };
+// Add new bulk payment handler method
+const handleBulkPayments = async (data: {
+  payments: Payment[];
+  paymentMethod: 'cash' | 'transfer';
+  notes?: string;
+  paymentImage?: File;
+}, onProgress?: (progress: number) => void) => {
+  try {
+    console.log('Processing bulk payments...', data.payments.length);
+    
+    let sharedImageData = {};
+    
+    // Upload shared image if provided with progress callback
+    if (data.paymentImage) {
+      const bulkId = `bulk-${Date.now()}`;
+      console.log('Uploading bulk payment image...');
+      
+      // Pass progress callback to storage service
+      const { downloadURL, path } = await StorageService.uploadBulkPaymentImage(
+        data.paymentImage, 
+        bulkId,
+        onProgress // Pass the progress callback
+      );
+      
+      sharedImageData = {
+        paymentImageUrl: downloadURL,
+        paymentImagePath: path
+      };
+      console.log('Bulk payment image uploaded successfully');
+    }
+
+    // Process each payment
+    const processedPayments = [];
+    const totalPayments = data.payments.length;
+    
+    for (let i = 0; i < data.payments.length; i++) {
+      const payment = data.payments[i];
+      try {
+        const paymentUpdate = {
+          paymentStatus: 'paid' as const,
+          paymentMethod: data.paymentMethod,
+          paymentDate: new Date(),
+          notes: data.notes || '',
+          processedBy: 'current-user',
+          receiptNumber: generateReceiptNumber(),
+          amountPaid: (payment.amount || payment.amountDue) + (payment.lateFee || 0),
+          ...sharedImageData // Add shared image data to each payment
+        };
+
+        // Update the payment (this will move it to paid collection)
+        await updatePayment(payment.paymentId || payment.id, paymentUpdate, payment);
+        processedPayments.push(payment);
+        
+        // Update progress for payment processing (if no image, use this for progress)
+        if (!data.paymentImage && onProgress) {
+          const progress = Math.round(((i + 1) / totalPayments) * 100);
+          onProgress(progress);
+        }
+        
+        console.log(`Processed payment ${payment.paymentId || payment.id}`);
+      } catch (error) {
+        console.error(`Failed to process payment ${payment.paymentId || payment.id}:`, error);
+        // Continue with other payments even if one fails
+      }
+    }
+
+    console.log(`Bulk payment processing completed: ${processedPayments.length}/${data.payments.length} payments processed`);
+    return processedPayments;
+  } catch (error) {
+    console.error('Error in bulk payment processing:', error);
+    throw error;
+  }
+};
+
 
 // Delete payments
   const deletePayment = async (id: string) => {
@@ -1959,6 +2085,8 @@ const updatePayment = async (
         tenants,
         payments,
          paidPayments, // ADD THIS
+         // Add the new handler
+      
     
         bills,
         users,
@@ -1980,6 +2108,8 @@ const updatePayment = async (
         addPayment,
         updatePayment,
         deletePayment,
+        handleBulkPayments,
+        
 
         // ADD:
         processLateFees,

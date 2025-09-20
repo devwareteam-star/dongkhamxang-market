@@ -13,11 +13,14 @@ import {
   List,
   Users,
   ChevronDown,
-  ChevronRight
+  ChevronRight,
+  Image as ImageIcon, // ADD THIS
+  Eye, // ADD THIS
+  X // ADD THIS
 } from 'lucide-react';
 
 const ReceiptManagement: React.FC = () => {
-  const { payments, spaces, tenants, paidPayments } = useData();
+  const { payments, spaces, tenants, paidPayments} = useData();
   const [searchTerm, setSearchTerm] = useState('');
   const [dateFilter, setDateFilter] = useState('');
   const [spaceTypeFilter, setSpaceTypeFilter] = useState<string>('all');
@@ -25,6 +28,21 @@ const ReceiptManagement: React.FC = () => {
   const [activeFrequencyTab, setActiveFrequencyTab] = useState<string>('all');
   const [viewMode, setViewMode] = useState<'list' | 'tenant'>('list');
   const [expandedTenants, setExpandedTenants] = useState<Set<string>>(new Set());
+  const [selectedImage, setSelectedImage] = useState<string | null>(null);
+const [showImageModal, setShowImageModal] = useState(false);
+
+    // Handle get image
+    const handleViewImage = (imageUrl: string) => {
+  setSelectedImage(imageUrl);
+  setShowImageModal(true);
+};
+
+const handleDownloadImage = (imageUrl: string, receiptNumber: string) => {
+  const link = document.createElement('a');
+  link.href = imageUrl;
+  link.download = `payment-proof-${receiptNumber}.jpg`;
+  link.click();
+};
 
   // Get paid payments with receipt numbers
   const receipts = paidPayments.filter(p => p.receiptNumber);
@@ -67,6 +85,7 @@ const ReceiptManagement: React.FC = () => {
     const matchesPaymentMethod = paymentMethodFilter === 'all' || receipt.paymentMethod === paymentMethodFilter;
     
     return matchesSearch && matchesDate && matchesSpaceType && matchesPaymentMethod;
+
   });
 
   // Group receipts by tenant
@@ -161,6 +180,8 @@ const ReceiptManagement: React.FC = () => {
         default: return type;
       }
     };
+
+
       
     const printWindow = window.open('', '_blank');
     if (printWindow) {
@@ -401,6 +422,7 @@ const ReceiptManagement: React.FC = () => {
           <th className="text-left py-3 px-4 font-medium text-gray-700 text-sm">ວັນທີ່</th>
           <th className="text-left py-3 px-4 font-medium text-gray-700 text-sm">ວິທີຈ່າຍ</th>
           <th className="text-center py-3 px-4 font-medium text-gray-700 text-sm">ການດຳເນີນການ</th>
+          <th className="text-center py-3 px-4 font-medium text-gray-700 text-sm">ຮູບພາບ</th>
         </tr>
       </thead>
       <tbody className="divide-y divide-gray-100">
@@ -470,6 +492,27 @@ const ReceiptManagement: React.FC = () => {
                   <span>ພິມ</span>
                 </button>
               </td>
+              <td className="py-3 px-4 text-center">
+  {receipt.paymentImageUrl ? (
+    <div className="flex items-center justify-center space-x-1">
+      <button
+  onClick={() => receipt.paymentImageUrl && handleViewImage(receipt.paymentImageUrl)}
+  className="flex items-center space-x-1 px-2 py-1 bg-green-100 text-green-700 rounded hover:bg-green-200 text-xs"
+>
+  <Eye className="w-3 h-3" />
+  <span>ເບິ່ງ</span>
+</button>
+<button
+  onClick={() => receipt.paymentImageUrl && receipt.receiptNumber && handleDownloadImage(receipt.paymentImageUrl, receipt.receiptNumber)}
+  className="flex items-center space-x-1 px-2 py-1 bg-blue-100 text-blue-700 rounded hover:bg-blue-200 text-xs"
+>
+  <Download className="w-3 h-3" />
+</button>
+    </div>
+  ) : (
+    <span className="text-gray-400 text-xs">ບໍ່ມີ</span>
+  )}
+</td>
             </tr>
           );
         })}
@@ -530,18 +573,27 @@ const ReceiptManagement: React.FC = () => {
                         <span className="ml-2 text-sm text-gray-600">({space?.spaceCode})</span>
                       </div>
                       <div className="text-xs text-gray-500 flex items-center space-x-2">
-                        <span className={`px-2 py-1 rounded-full ${getFrequencyColor(receipt.paymentFrequency || receipt.paymentType)}`}>
-                          {getFrequencyText(receipt.paymentFrequency || receipt.paymentType)}
-                        </span>
-                        <span>{space?.spaceType}</span>
-                        <span className={`px-2 py-1 rounded-full ${
-                          receipt.paymentMethod === 'cash' 
-                            ? 'bg-green-100 text-green-800' 
-                            : 'bg-blue-100 text-blue-800'
-                        }`}>
-                          {receipt.paymentMethod === 'cash' ? 'ເງິນສົດ' : 'ໂອນເງິນ'}
-                        </span>
-                      </div>
+  <span className={`px-2 py-1 rounded-full ${getFrequencyColor(receipt.paymentFrequency || receipt.paymentType)}`}>
+    {getFrequencyText(receipt.paymentFrequency || receipt.paymentType)}
+  </span>
+  <span>{space?.spaceType}</span>
+  <span className={`px-2 py-1 rounded-full ${
+    receipt.paymentMethod === 'cash' 
+      ? 'bg-green-100 text-green-800' 
+      : 'bg-blue-100 text-blue-800'
+  }`}>
+    {receipt.paymentMethod === 'cash' ? 'ເງິນສົດ' : 'ໂອນເງິນ'}
+  </span>
+  {receipt.paymentImageUrl && (
+  <button
+    onClick={() => receipt.paymentImageUrl && handleViewImage(receipt.paymentImageUrl)}
+    className="flex items-center space-x-1 px-2 py-1 bg-purple-100 text-purple-700 rounded hover:bg-purple-200"
+  >
+    <ImageIcon className="w-3 h-3" />
+    <span>ມີຮູບ</span>
+  </button>
+)}
+</div>
                     </div>
                   </div>
                   
@@ -579,8 +631,42 @@ const ReceiptManagement: React.FC = () => {
           </div>
         )}
       </div>
+      {/* Image Modal */}
+{showImageModal && selectedImage && (
+  <div className="fixed inset-0 bg-black bg-opacity-90 flex items-center justify-center p-4 z-50">
+    <div className="relative max-w-4xl max-h-full">
+      <button
+        onClick={() => setShowImageModal(false)}
+        className="absolute top-4 right-4 text-white hover:text-gray-300 z-10"
+      >
+        <X className="w-6 h-6" />
+      </button>
+      <img
+        src={selectedImage}
+        alt="Payment proof"
+        className="max-w-full max-h-full object-contain rounded-lg"
+      />
+      <div className="absolute bottom-4 left-4 right-4 flex justify-center space-x-4">
+        <button
+          onClick={() => {
+            const link = document.createElement('a');
+            link.href = selectedImage;
+            link.download = 'payment-proof.jpg';
+            link.click();
+          }}
+          className="flex items-center space-x-2 px-4 py-2 bg-white text-gray-900 rounded-lg hover:bg-gray-100"
+        >
+          <Download className="w-4 h-4" />
+          <span>ດາວໂຫຼດ</span>
+        </button>
+      </div>
     </div>
+  </div>
+)}
+    </div>
+    
   );
+  
 };
 
 export default ReceiptManagement;
