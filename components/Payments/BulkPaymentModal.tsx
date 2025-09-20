@@ -200,7 +200,16 @@ const BulkPaymentModal: React.FC<BulkPaymentModalProps> = ({
                   >
                     <div className="text-lg font-medium">{getPaymentTypeText(type)}</div>
                     <div className="text-sm text-gray-500 mt-1">
-                      {payments.filter(p => p.paymentType === type && p.status !== 'paid').length} ລາຍການ
+                       {payments.filter(p => {
+                        if (p.paymentType !== type || p.status === 'paid') return false;
+                        
+                        // Only count overdue and current payments (exclude future)
+                        const today = new Date();
+                        const todayEnd = new Date(today.getFullYear(), today.getMonth(), today.getDate() + 1);
+                        const dueDate = new Date(p.dueDate);
+                        
+                        return dueDate < todayEnd;
+                      }).length} ລາຍການ
                     </div>
                   </button>
                 ))}
@@ -280,7 +289,7 @@ const BulkPaymentModal: React.FC<BulkPaymentModalProps> = ({
               <div className="max-h-96 overflow-y-auto border rounded-lg">
                 {selectionMethod === 'tenant' ? (
                   // Tenant grouped view
-                  <div className="divide-y">
+                 <div className="divide-y">
                     {groupedPayments.map((group) => {
                       const tenantPaymentIds = group.payments.map(p => p.id || p.paymentId).filter(Boolean);
                       const selectedCount = tenantPaymentIds.filter(id => selectedPayments.has(id)).length;
@@ -309,8 +318,34 @@ const BulkPaymentModal: React.FC<BulkPaymentModalProps> = ({
                               >
                                 <div className="font-medium text-gray-900">{group.tenant.tenantName}</div>
                                 <div className="text-sm text-gray-500">
-                                  {group.payments.length} ລາຍການ • ₭{group.totalAmount.toLocaleString()}
-                                </div>
+  {(() => {
+    const today = new Date();
+    const todayStart = new Date(today.getFullYear(), today.getMonth(), today.getDate());
+    const todayEnd = new Date(todayStart);
+    todayEnd.setDate(todayEnd.getDate() + 1);
+
+    const overdueCount = group.payments.filter(p => {
+      const dueDate = new Date(p.dueDate);
+      return dueDate < todayStart;
+    }).length;
+
+    const currentCount = group.payments.filter(p => {
+      const dueDate = new Date(p.dueDate);
+      return dueDate >= todayStart && dueDate < todayEnd;
+    }).length;
+
+    const totalCollectible = overdueCount + currentCount;
+
+    return (
+      <>
+        {`${totalCollectible} ລາຍການ • ₭${group.totalAmount.toLocaleString()}`}
+        {overdueCount > 0 && (
+          <span className="text-red-500"> • {overdueCount} ເກີນກຳນົດ</span>
+        )}
+      </>
+    );
+  })()}
+</div>
                               </button>
                             </div>
                             <div className="text-sm text-blue-600">
@@ -376,7 +411,11 @@ const BulkPaymentModal: React.FC<BulkPaymentModalProps> = ({
                             <div className="flex items-center justify-between">
                               <div>
                                 <div className="font-medium text-gray-900">
-                                  {space?.spaceCode} - {tenant?.tenantName}
+                                  {space?.spaceCode} - {tenant?.tenantName} -  {payment.lateFeeApplied && (
+  <span style={{ color: "red", fontWeight: "bold" }}>
+    ກາຍມື້
+  </span>
+)}
                                 </div>
                                 <div className="text-sm text-gray-500">
                                   {space?.spaceType} • {new Date(payment.dueDate).toLocaleDateString('lo-LA')}
@@ -438,6 +477,55 @@ const BulkPaymentModal: React.FC<BulkPaymentModalProps> = ({
                   <div className="text-lg font-bold text-green-600 mt-2">
                     ຍອດລວມ: ₭{getTotalAmount().toLocaleString()}
                   </div>
+                </div>
+              </div>
+
+              {/* Selected Payments List */}
+              <div className="mb-6">
+                <h4 className="font-medium text-gray-900 mb-3">ລາຍການທີ່ເລືອກ</h4>
+                <div className="max-h-48 overflow-y-auto border border-gray-200 rounded-lg bg-white">
+                  {getSelectedPaymentsData().map((payment, index) => {
+                    const space = spaces.find(s => s.id === payment.spaceId || s.id === payment.roomId);
+                    const tenant = tenants.find(t => t.tenantId === payment.tenantId);
+                    const totalAmount = (payment.amount || 0) + (payment.lateFee || 0);
+                    
+                    // Determine payment status
+                    const today = new Date();
+                    const todayStart = new Date(today.getFullYear(), today.getMonth(), today.getDate());
+                    const dueDate = new Date(payment.dueDate);
+                    const isOverdue = dueDate < todayStart;
+                    
+                    return (
+                      <div key={payment.id || payment.paymentId} className="flex items-center justify-between p-3 border-b border-gray-100 last:border-b-0">
+                        <div className="flex-1">
+                          <div className="flex items-center space-x-2">
+                            <span className="font-medium text-gray-900">{space?.spaceCode || 'N/A'}</span>
+                            <span className="text-sm text-gray-500">•</span>
+                            <span className="text-sm text-gray-600">{tenant?.tenantName || 'N/A'}</span>
+                            <span className={`px-2 py-1 text-xs rounded-full ${
+                              isOverdue 
+                                ? 'bg-red-100 text-red-700' 
+                                : 'bg-yellow-100 text-yellow-700'
+                            }`}>
+                              {isOverdue ? 'ເກີນກຳນົດ' : 'ປັດຈຸບັນ'}
+                            </span>
+                          </div>
+                          <div className="text-xs text-gray-500 mt-1">
+                            {space?.spaceType} • {new Date(payment.dueDate).toLocaleDateString('lo-LA')}
+                            {payment.lateFee && payment.lateFee > 0 && (
+                              <span className="text-red-500 ml-2">
+                                (ມີຄ່າປັບ: ₭{payment.lateFee.toLocaleString()})
+                              </span>
+                            )}
+                          </div>
+                        </div>
+                        <div className="text-right">
+                          <div className="font-semibold text-gray-900">₭{totalAmount.toLocaleString()}</div>
+                          <div className="text-xs text-gray-500">#{index + 1}</div>
+                        </div>
+                      </div>
+                    );
+                  })}
                 </div>
               </div>
 
