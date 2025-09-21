@@ -206,9 +206,9 @@ const SpaceManagement: React.FC = () => {
               className="w-full pl-10 pr-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent appearance-none"
             >
               <option value="all">ສະຖານະທັງໝົດ</option>
-              <option value="ວ່າງ">ວ່າງ</option>
-              <option value="ເຊົ່າແລ້ວ">ເຊົ່າແລ້ວ</option>
-              <option value="ຊ່ອມແຊມ">ຊ່ອມແຊມ</option>
+              <option value="vacant">ວ່າງ</option>
+              <option value="rented">ເຊົ່າແລ້ວ</option>
+              <option value="maintaince">ຊ່ອມແຊມ</option>
             </select>
           </div>
 
@@ -219,10 +219,10 @@ const SpaceManagement: React.FC = () => {
               className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent appearance-none"
             >
               <option value="all">ປະເພດທັງໝົດ</option>
-              <option value="ໂຕະ">ໂຕະ</option>
-              <option value="ຫ້ອງເຊົ່າ">ຫ້ອງເຊົ່າ</option>
-              <option value="ປ້າຍ">ປ້າຍ</option>
-              <option value="ບູດ">ບູດ</option>
+              <option value="table">ໂຕະ</option>
+              <option value="room">ຫ້ອງເຊົ່າ</option>
+              <option value="signage">ປ້າຍ</option>
+              <option value="booth">ບູດ</option>
             </select>
           </div>
 
