@@ -16,6 +16,8 @@ import {
   ChevronRight,
   Users,
   List,
+  Filter,
+  ChevronUp,
 } from "lucide-react";
 import PaymentModal from "./PaymentModal";
 import BulkPaymentModal from "./BulkPaymentModal";
@@ -28,13 +30,12 @@ const PaymentCollection: React.FC = () => {
     updatePayment, 
     generateReceiptNumber,
     generatePaymentsForAllTenants,
-    handleBulkPayments,
     loading 
   } = useData();
   const { user } = useAuth();
 
   // Clean up duplicate data
-  const { cleanupDuplicatePayments} = useData();
+  const { cleanupDuplicatePayments } = useData();
   const [isCleaningUp, setIsCleaningUp] = useState(false);
   
   // New state for enhanced UI
@@ -42,6 +43,7 @@ const PaymentCollection: React.FC = () => {
   const [activeFrequencyTab, setActiveFrequencyTab] = useState<string>("all");
   const [viewMode, setViewMode] = useState<"list" | "tenant">("list");
   const [expandedTenants, setExpandedTenants] = useState<Set<string>>(new Set());
+  const [showFilters, setShowFilters] = useState(false);
   
   // Existing state
   const [searchTerm, setSearchTerm] = useState("");
@@ -58,7 +60,7 @@ const PaymentCollection: React.FC = () => {
 
   const getLateFeeDisplay = (payment: Payment) => {
     if (!payment.lateFee || payment.lateFee === 0) {
-      return <span className="text-gray-400 text-xs">No late fee</span>;
+      return <span className="text-gray-400 text-xs">ບໍ່ມີຄ່າປັບ</span>;
     }
     
     const percentage = payment.lateFeeRate ? (payment.lateFeeRate * 100).toFixed(0) : '0';
@@ -87,7 +89,7 @@ const PaymentCollection: React.FC = () => {
     }
   };
 
-  // Time-based filtering (removed history tab)
+  // Time-based filtering
   const getTimeFilteredPayments = () => {
     const today = new Date();
     const todayStart = new Date(today.getFullYear(), today.getMonth(), today.getDate());
@@ -257,22 +259,30 @@ const PaymentCollection: React.FC = () => {
   };
 
   const handleBulkPaymentSubmit = async (data: {
-  payments: Payment[];
-  paymentMethod: 'cash' | 'transfer';
-  notes?: string;
-  paymentImage?: File;
-}) => {
-  try {
-    // Use the new handleBulkPayments method from DataContext that supports images
-    const processedPayments = await handleBulkPayments(data);
-    
-    setIsBulkPaymentModalOpen(false);
-    alert(`ເກັບເງິນສຳເລັດແລ້ວ ${processedPayments.length} ລາຍການ`);
-  } catch (error) {
-    console.error("Error processing bulk payments:", error);
-    alert("ເກີດຂໍ້ຜິດພາດໃນການເກັບເງິນຫຼາຍ");
-  }
-};
+    payments: Payment[];
+    paymentMethod: 'cash' | 'transfer';
+    notes?: string;
+  }) => {
+    try {
+      for (const payment of data.payments) {
+        const receiptNumber = generateReceiptNumber();
+        await updatePayment(payment.id, {
+          paymentStatus: 'paid',
+          paymentDate: new Date(),
+          paymentMethod: data.paymentMethod,
+          receiptNumber,
+          processedBy: user?.id,
+          notes: data.notes || undefined
+        });
+      }
+      
+      setIsBulkPaymentModalOpen(false);
+      alert(`ເກັບເງິນສຳເລັດແລ້ວ ${data.payments.length} ລາຍການ`);
+    } catch (error) {
+      console.error("Error processing bulk payments:", error);
+      alert("ເກີດຂໍ້ຜິດພາດໃນການເກັບເງິນຫຼາຍ");
+    }
+  };
 
   // Status helpers
   const getStatusIcon = (payment: Payment) => {
@@ -352,7 +362,7 @@ const PaymentCollection: React.FC = () => {
 
   if (loading) {
     return (
-      <div className="p-6">
+      <div className="p-4 md:p-6">
         <div className="animate-pulse">
           <div className="h-8 bg-gray-200 rounded w-1/4 mb-4"></div>
           <div className="h-20 bg-gray-200 rounded mb-6"></div>
@@ -366,7 +376,7 @@ const PaymentCollection: React.FC = () => {
     );
   }
 
-  // Time-based tabs (removed history tab)
+  // Time-based tabs
   const timeTabs = [
     { 
       id: "overdue", 
@@ -429,17 +439,17 @@ const PaymentCollection: React.FC = () => {
   ];
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-4 md:space-y-6 p-4 md:p-0">
       {/* Header */}
-      <div className="flex justify-between items-start">
+      <div className="flex flex-col sm:flex-row justify-between items-start gap-4">
         <div>
-          <h1 className="text-3xl font-bold text-gray-900">ການຊຳລະເງິນ</h1>
-          <p className="text-gray-600 mt-1">
+          <h1 className="text-2xl md:text-3xl font-bold text-gray-900">ການຊຳລະເງິນ</h1>
+          <p className="text-gray-600 mt-1 text-sm md:text-base">
             ຈັດການການເກັບເງິນຄ່າເຊົ່າ - ລາຍການທັງໝົດ {filteredPayments.length} ລາຍການ
           </p>
         </div>
         
-        <div className="flex space-x-2">
+        <div className="flex flex-col sm:flex-row space-y-2 sm:space-y-0 sm:space-x-2 w-full sm:w-auto">
           <button
             onClick={async () => {
               try {
@@ -459,7 +469,7 @@ const PaymentCollection: React.FC = () => {
             className="flex items-center justify-center px-3 py-2 bg-blue-50 hover:bg-blue-100 border border-blue-200 rounded text-xs font-medium text-blue-700 transition-colors disabled:opacity-50"
           >
             <Calendar className="w-3 h-3 mr-1" />
-            ສ້າງລາຍຈ່າຍທັງໝົດ
+            <span className="text-xs md:text-sm">ສ້າງລາຍຈ່າຍທັງໝົດ</span>
           </button>
           
           <button
@@ -467,27 +477,28 @@ const PaymentCollection: React.FC = () => {
             className="flex items-center justify-center px-3 py-2 bg-green-50 hover:bg-green-100 border border-green-200 rounded text-xs font-medium text-green-700 transition-colors"
           >
             <CreditCard className="w-3 h-3 mr-1" />
-            ເກັບເງິນຫຼາຍ
+            <span className="text-xs md:text-sm">ເກັບເງິນຫຼາຍ</span>
           </button>
         </div>
       </div>
 
       {/* Time-based Navigation */}
       <div className="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden">
+        {/* Time Tabs */}
         <div className="flex border-b border-gray-200">
           {timeTabs.map((tab) => (
             <button
               key={tab.id}
               onClick={() => setActiveTimeTab(tab.id)}
-              className={`flex-1 px-6 py-4 text-center font-medium transition-colors relative ${
+              className={`flex-1 px-3 md:px-6 py-3 md:py-4 text-center font-medium transition-colors relative ${
                 activeTimeTab === tab.id
                   ? "bg-blue-50 text-blue-700 border-b-2 border-blue-500"
                   : "text-gray-600 hover:text-gray-900 hover:bg-gray-50"
               }`}
             >
-              {tab.label}
+              <div className="text-xs md:text-sm">{tab.label}</div>
               {tab.count > 0 && (
-                <span className={`ml-2 px-2 py-1 text-xs rounded-full ${
+                <span className={`ml-1 md:ml-2 px-1.5 md:px-2 py-0.5 md:py-1 text-xs rounded-full ${
                   activeTimeTab === tab.id
                     ? "bg-blue-100 text-blue-800"
                     : "bg-gray-100 text-gray-600"
@@ -505,13 +516,13 @@ const PaymentCollection: React.FC = () => {
             <button
               key={tab.id}
               onClick={() => setActiveFrequencyTab(tab.id)}
-              className={`flex-1 px-4 py-3 text-center text-sm font-medium transition-colors ${
+              className={`flex-1 px-2 md:px-4 py-2 md:py-3 text-center text-xs md:text-sm font-medium transition-colors ${
                 activeFrequencyTab === tab.id
                   ? "bg-red-50 text-red-700 border-b-2 border-red-500"
                   : "text-gray-600 hover:text-gray-900 hover:bg-gray-100"
               }`}
             >
-              {tab.label}
+              <div>{tab.label}</div>
               {tab.count > 0 && (
                 <span className={`ml-1 px-1.5 py-0.5 text-xs rounded-full ${
                   activeFrequencyTab === tab.id
@@ -525,10 +536,11 @@ const PaymentCollection: React.FC = () => {
           ))}
         </div>
 
-        {/* Filters and View Toggle */}
+        {/* Search and Filter Toggle */}
         <div className="p-4 bg-gray-50">
-          <div className="grid grid-cols-1 md:grid-cols-5 gap-4">
-            <div className="relative">
+          <div className="flex flex-col sm:flex-row gap-4">
+            {/* Search */}
+            <div className="relative flex-1">
               <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 w-4 h-4 text-gray-400" />
               <input
                 type="text"
@@ -538,248 +550,373 @@ const PaymentCollection: React.FC = () => {
                 className="w-full pl-9 pr-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent text-sm"
               />
             </div>
-
-            <div className="relative">
-              <Building2 className="absolute left-3 top-1/2 transform -translate-y-1/2 w-4 h-4 text-gray-400" />
-              <select
-                value={spaceTypeFilter}
-                onChange={(e) => setSpaceTypeFilter(e.target.value)}
-                className="w-full pl-9 pr-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent appearance-none text-sm"
-              >
-                <option value="all">ປະເພດທັງໝົດ</option>
-                <option value="ໂຕະ">ໂຕະ</option>
-                <option value="ຫ້ອງເຊົ່າ">ຫ້ອງເຊົ່າ</option>
-                <option value="ປ້າຍ">ປ້າຍ</option>
-                <option value="ບູດ">ບູດ</option>
-              </select>
-            </div>
-
-            <div className="flex bg-white rounded-lg border border-gray-300 p-1">
-              <button
-                onClick={() => setViewMode("list")}
-                className={`flex items-center space-x-1 px-3 py-1 rounded text-xs font-medium transition-colors ${
-                  viewMode === "list"
-                    ? "bg-blue-100 text-blue-700"
-                    : "text-gray-600 hover:text-gray-900"
-                }`}
-              >
-                <List className="w-3 h-3" />
-                <span>ລາຍການ</span>
-              </button>
-              <button
-                onClick={() => setViewMode("tenant")}
-                className={`flex items-center space-x-1 px-3 py-1 rounded text-xs font-medium transition-colors ${
-                  viewMode === "tenant"
-                    ? "bg-blue-100 text-blue-700"
-                    : "text-gray-600 hover:text-gray-900"
-                }`}
-              >
-                <Users className="w-3 h-3" />
-                <span>ຜູ້ເຊົ່າ</span>
-              </button>
-            </div>
-
-            <div className="flex items-center justify-center text-xs text-gray-600 bg-white rounded-lg px-3 py-2 border border-gray-300">
-              <CreditCard className="w-3 h-3 mr-1" />
-              {viewMode === "list" ? filteredPayments.length : groupedPayments.length} ລາຍການ
-            </div>
-
-            <div className="flex items-center justify-center"></div>
+            
+            {/* Filter Toggle */}
+            <button
+              onClick={() => setShowFilters(!showFilters)}
+              className="flex items-center justify-center space-x-2 px-4 py-2 border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors"
+            >
+              <Filter className="w-4 h-4" />
+              <span className="hidden sm:inline text-sm">ຟິວເຕີ</span>
+              {showFilters ? <ChevronUp className="w-4 h-4" /> : <ChevronDown className="w-4 h-4" />}
+            </button>
           </div>
+
+          {/* Collapsible Filters */}
+          {showFilters && (
+            <div className="mt-4 grid grid-cols-1 sm:grid-cols-3 gap-4">
+              <div className="relative">
+                <Building2 className="absolute left-3 top-1/2 transform -translate-y-1/2 w-4 h-4 text-gray-400" />
+                <select
+                  value={spaceTypeFilter}
+                  onChange={(e) => setSpaceTypeFilter(e.target.value)}
+                  className="w-full pl-9 pr-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent appearance-none text-sm"
+                >
+                  <option value="all">ປະເພດທັງໝົດ</option>
+                  <option value="ໂຕະ">ໂຕະ</option>
+                  <option value="ຫ້ອງເຊົ່າ">ຫ້ອງເຊົ່າ</option>
+                  <option value="ປ້າຍ">ປ້າຍ</option>
+                  <option value="ບູດ">ບູດ</option>
+                </select>
+              </div>
+
+              <div className="flex bg-white rounded-lg border border-gray-300 p-1">
+                <button
+                  onClick={() => setViewMode("list")}
+                  className={`flex items-center space-x-1 px-3 py-1 rounded text-xs font-medium transition-colors ${
+                    viewMode === "list"
+                      ? "bg-blue-100 text-blue-700"
+                      : "text-gray-600 hover:text-gray-900"
+                  }`}
+                >
+                  <List className="w-3 h-3" />
+                  <span>ລາຍການ</span>
+                </button>
+                <button
+                  onClick={() => setViewMode("tenant")}
+                  className={`flex items-center space-x-1 px-3 py-1 rounded text-xs font-medium transition-colors ${
+                    viewMode === "tenant"
+                      ? "bg-blue-100 text-blue-700"
+                      : "text-gray-600 hover:text-gray-900"
+                  }`}
+                >
+                  <Users className="w-3 h-3" />
+                  <span>ຜູ້ເຊົ່າ</span>
+                </button>
+              </div>
+
+              <div className="flex items-center justify-center text-xs text-gray-600 bg-white rounded-lg px-3 py-2 border border-gray-300">
+                <CreditCard className="w-3 h-3 mr-1" />
+                {viewMode === "list" ? filteredPayments.length : groupedPayments.length} ລາຍການ
+              </div>
+            </div>
+          )}
         </div>
       </div>
 
       {/* Content Area */}
       <div className="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden">
         {viewMode === "list" ? (
-          /* List View */
-         <div className="overflow-x-auto">
-  <div className="max-h-[650px] overflow-y-auto">
-    <table className="w-full">
-      <thead className="bg-gray-50 border-b border-gray-200 sticky top-0 z-10">
-        <tr>
-          <th className="text-left py-3 px-4 font-medium text-gray-700 text-sm">ສະຖານະ</th>
-          <th className="text-left py-3 px-4 font-medium text-gray-700 text-sm">ພື້ນທີ່</th>
-          <th className="text-left py-3 px-4 font-medium text-gray-700 text-sm">ຜູ້ເຊົ່າ</th>
-          <th className="text-left py-3 px-4 font-medium text-gray-700 text-sm">ຮອບ</th>
-          <th className="text-right py-3 px-4 font-medium text-gray-700 text-sm">ເງິນຕົ້ນ</th>
-          <th className="text-right py-3 px-4 font-medium text-gray-700 text-sm">ຄ່າປັບ</th>
-          <th className="text-right py-3 px-4 font-medium text-gray-700 text-sm">ລວມ</th>
-          <th className="text-left py-3 px-4 font-medium text-gray-700 text-sm">ກຳນົດ</th>
-          <th className="text-center py-3 px-4 font-medium text-gray-700 text-sm">ການດຳເນີນການ</th>
-        </tr>
-      </thead>
-      <tbody className="divide-y divide-gray-100">
-        {filteredPayments.map((payment) => {
-          const space = spaces.find(s => 
-             s.id === payment.spaceId || s.id === payment.roomId
-          );
-          const tenant = tenants.find(t => t.tenantId === payment.tenantId);
-          const originalAmount = payment.originalAmount || getPaymentAmount(payment);
-          const totalAmount = originalAmount + (payment.lateFee || 0);
+          /* Mobile Card View / Desktop Table View */
+          <>
+            {/* Mobile Card View (hidden on desktop) */}
+            <div className="block md:hidden">
+              {filteredPayments.length === 0 ? (
+                <div className="text-center py-12">
+                  <CreditCard className="w-16 h-16 mx-auto text-gray-400 mb-4" />
+                  <h3 className="text-lg font-medium text-gray-900 mb-2">
+                    ບໍ່ພົບລາຍການຊຳລະເງິນ
+                  </h3>
+                  <p className="text-gray-600">ບໍ່ມີລາຍການທີ່ຕົງກັບເງື່ອນໄຂການຄົ້ນຫາ</p>
+                </div>
+              ) : (
+                <div className="divide-y divide-gray-200 max-h-[600px] overflow-y-auto">
+                  {filteredPayments.map((payment) => {
+                    const space = spaces.find(s => 
+                       s.id === payment.spaceId || s.id === payment.roomId
+                    );
+                    const tenant = tenants.find(t => t.tenantId === payment.tenantId);
+                    const originalAmount = payment.originalAmount || getPaymentAmount(payment);
+                    const totalAmount = originalAmount + (payment.lateFee || 0);
 
-          return (
-            <tr key={payment.id || payment.paymentId} className="hover:bg-gray-50 transition-colors">
-              <td className="py-3 px-4">
-                <div className="flex items-center space-x-2">
-                  {getStatusIcon(payment)}
-                  <span className={`px-2 py-1 text-xs font-medium rounded-full ${getStatusColor(payment)}`}>
-                    {getStatusText(payment)}
-                  </span>
+                    return (
+                      <div key={payment.id || payment.paymentId} className="p-4">
+                        <div className="flex justify-between items-start mb-3">
+                          <div className="flex items-center space-x-2">
+                            {getStatusIcon(payment)}
+                            <span className={`px-2 py-1 text-xs font-medium rounded-full ${getStatusColor(payment)}`}>
+                              {getStatusText(payment)}
+                            </span>
+                          </div>
+                          <span className={`px-2 py-1 text-xs font-medium rounded-full ${getFrequencyColor(payment.paymentType)}`}>
+                            {getFrequencyText(payment.paymentType)}
+                          </span>
+                        </div>
+
+                        <div className="grid grid-cols-2 gap-3 text-sm mb-4">
+                          <div>
+                            <span className="text-gray-500">ພື້ນທີ່:</span>
+                            <div className="mt-1 font-medium text-gray-900">{space?.spaceCode || 'N/A'}</div>
+                          </div>
+                          
+                          <div>
+                            <span className="text-gray-500">ຜູ້ເຊົ່າ:</span>
+                            <div className="mt-1 font-medium text-gray-900">{tenant?.tenantName || 'N/A'}</div>
+                          </div>
+
+                          <div>
+                            <span className="text-gray-500">ເງິນຕົ້ນ:</span>
+                            <div className="mt-1 font-medium text-blue-600">₭{originalAmount.toLocaleString()}</div>
+                          </div>
+
+                          {payment.lateFee && payment.lateFee > 0 && (
+                            <div>
+                              <span className="text-gray-500">ຄ່າປັບ:</span>
+                              <div className="mt-1 font-medium text-red-600">₭{payment.lateFee.toLocaleString()}</div>
+                            </div>
+                          )}
+
+                          <div className="col-span-2">
+                            <span className="text-gray-500">ລວມທັງໝົດ:</span>
+                            <div className="mt-1 font-bold text-lg text-gray-900">₭{totalAmount.toLocaleString()}</div>
+                          </div>
+
+                          <div>
+                            <span className="text-gray-500">ກຳນົດຊຳລະ:</span>
+                            <div className="mt-1 text-gray-700">
+                              {new Date(payment.dueDate).toLocaleDateString("lo-LA")}
+                            </div>
+                          </div>
+                        </div>
+
+                        {/* Action Button */}
+                        <div className="flex justify-end">
+                          {activeTimeTab === "future" ? (
+                            <div className="flex items-center justify-center px-4 py-2 text-sm text-gray-400 bg-gray-50 rounded-lg">
+                              <span>ຍັງບໍ່ເຖິງເວລາ</span>
+                            </div>
+                          ) : (
+                            <button
+                              onClick={() => handleCollectPayment(payment)}
+                              className={`flex items-center space-x-2 px-4 py-2 rounded-lg transition-colors text-sm font-medium ${
+                                payment.status === 'overdue'
+                                  ? "bg-red-50 hover:bg-red-100 text-red-700"
+                                  : "bg-green-50 hover:bg-green-100 text-green-700"
+                              }`}
+                            >
+                              <CreditCard className="w-4 h-4" />
+                              <span>ເກັບເງິນ</span>
+                            </button>
+                          )}
+                        </div>
+                      </div>
+                    );
+                  })}
                 </div>
-              </td>
-              
-              <td className="py-3 px-4">
-                <div className="font-medium text-gray-900">{space?.spaceCode || 'N/A'}</div>
-                <div className="text-xs text-gray-500">{space?.spaceType || 'N/A'}</div>
-              </td>
-              
-              <td className="py-3 px-4">
-                <div className="font-medium text-gray-900">{tenant?.tenantName || 'N/A'}</div>
-              </td>
-              
-              <td className="py-3 px-4">
-                <span className={`px-2 py-1 text-xs font-medium rounded-full ${getFrequencyColor(payment.paymentType)}`}>
-                  {getFrequencyText(payment.paymentType)}
-                </span>
-              </td>
-              
-              <td className="py-3 px-4 text-right">
-                <div className="font-medium text-gray-900">₭{originalAmount.toLocaleString()}</div>
-              </td>
-              
-              <td className="py-3 px-4 text-right">
-                {getLateFeeDisplay(payment)}
-              </td>
-              
-              <td className="py-3 px-4 text-right">
-                <div className="font-bold text-gray-900">₭{totalAmount.toLocaleString()}</div>
-              </td>
-              
-              <td className="py-3 px-4">
-                <div className="text-sm text-gray-900">
-                  {new Date(payment.dueDate).toLocaleDateString("lo-LA")}
+              )}
+            </div>
+
+            {/* Desktop Table View (hidden on mobile) */}
+            <div className="hidden md:block">
+              <div className="overflow-x-auto">
+                <div className="max-h-[650px] overflow-y-auto">
+                  <table className="w-full">
+                    <thead className="bg-gray-50 border-b border-gray-200 sticky top-0 z-10">
+                      <tr>
+                        <th className="text-left py-3 px-4 font-medium text-gray-700 text-sm">ສະຖານະ</th>
+                        <th className="text-left py-3 px-4 font-medium text-gray-700 text-sm">ພື້ນທີ່</th>
+                        <th className="text-left py-3 px-4 font-medium text-gray-700 text-sm">ຜູ້ເຊົ່າ</th>
+                        <th className="text-left py-3 px-4 font-medium text-gray-700 text-sm">ຮອບ</th>
+                        <th className="text-right py-3 px-4 font-medium text-gray-700 text-sm">ເງິນຕົ້ນ</th>
+                        <th className="text-right py-3 px-4 font-medium text-gray-700 text-sm">ຄ່າປັບ</th>
+                        <th className="text-right py-3 px-4 font-medium text-gray-700 text-sm">ລວມ</th>
+                        <th className="text-left py-3 px-4 font-medium text-gray-700 text-sm">ກຳນົດ</th>
+                        <th className="text-center py-3 px-4 font-medium text-gray-700 text-sm">ການດຳເນີນການ</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-gray-100">
+                      {filteredPayments.map((payment) => {
+                        const space = spaces.find(s => 
+                           s.id === payment.spaceId || s.id === payment.roomId
+                        );
+                        const tenant = tenants.find(t => t.tenantId === payment.tenantId);
+                        const originalAmount = payment.originalAmount || getPaymentAmount(payment);
+                        const totalAmount = originalAmount + (payment.lateFee || 0);
+
+                        return (
+                          <tr key={payment.id || payment.paymentId} className="hover:bg-gray-50 transition-colors">
+                            <td className="py-3 px-4">
+                              <div className="flex items-center space-x-2">
+                                {getStatusIcon(payment)}
+                                <span className={`px-2 py-1 text-xs font-medium rounded-full ${getStatusColor(payment)}`}>
+                                  {getStatusText(payment)}
+                                </span>
+                              </div>
+                            </td>
+                            
+                            <td className="py-3 px-4">
+                              <div className="font-medium text-gray-900">{space?.spaceCode || 'N/A'}</div>
+                              <div className="text-xs text-gray-500">{space?.spaceType || 'N/A'}</div>
+                            </td>
+                            
+                            <td className="py-3 px-4">
+                              <div className="font-medium text-gray-900">{tenant?.tenantName || 'N/A'}</div>
+                            </td>
+                            
+                            <td className="py-3 px-4">
+                              <span className={`px-2 py-1 text-xs font-medium rounded-full ${getFrequencyColor(payment.paymentType)}`}>
+                                {getFrequencyText(payment.paymentType)}
+                              </span>
+                            </td>
+                            
+                            <td className="py-3 px-4 text-right">
+                              <div className="font-medium text-gray-900">₭{originalAmount.toLocaleString()}</div>
+                            </td>
+                            
+                            <td className="py-3 px-4 text-right">
+                              {getLateFeeDisplay(payment)}
+                            </td>
+                            
+                            <td className="py-3 px-4 text-right">
+                              <div className="font-bold text-gray-900">₭{totalAmount.toLocaleString()}</div>
+                            </td>
+                            
+                            <td className="py-3 px-4">
+                              <div className="text-sm text-gray-900">
+                                {new Date(payment.dueDate).toLocaleDateString("lo-LA")}
+                              </div>
+                            </td>
+                            
+                            <td className="py-3 px-4 text-center">
+                              {activeTimeTab === "future" ? (
+                                <div className="flex items-center justify-center px-3 py-1 text-xs text-gray-400">
+                                  <span>ຍັງບໍ່ເຖິງເວລາ</span>
+                                </div>
+                              ) : (
+                                <button
+                                  onClick={() => handleCollectPayment(payment)}
+                                  className={`flex items-center space-x-1 px-3 py-1 rounded-lg transition-colors text-xs font-medium ${
+                                    payment.status === 'overdue'
+                                      ? "bg-red-50 hover:bg-red-100 text-red-700"
+                                      : "bg-green-50 hover:bg-green-100 text-green-700"
+                                  }`}
+                                >
+                                  <CreditCard className="w-3 h-3" />
+                                  <span>ເກັບ</span>
+                                </button>
+                              )}
+                            </td>
+                          </tr>
+                        );
+                      })}
+                    </tbody>
+                  </table>
                 </div>
-              </td>
-              
-             <td className="py-3 px-4 text-center">
-  {activeTimeTab === "future" ? (
-    <div className="flex items-center justify-center px-3 py-1 text-xs text-gray-400">
-      <span>ຍັງບໍ່ເຖິງເວລາ</span>
-    </div>
-  ) : (
-    <button
-      onClick={() => handleCollectPayment(payment)}
-      className={`flex items-center space-x-1 px-3 py-1 rounded-lg transition-colors text-xs font-medium ${
-        payment.status === 'overdue'
-          ? "bg-red-50 hover:bg-red-100 text-red-700"
-          : "bg-green-50 hover:bg-green-100 text-green-700"
-      }`}
-    >
-      <CreditCard className="w-3 h-3" />
-      <span>ເກັບ</span>
-    </button>
-  )}
-</td>
-            </tr>
-          );
-        })}
-      </tbody>
-    </table>
-  </div>
-</div>
-) : (
-  /* Tenant View */
-  <div className="divide-y divide-gray-200 max-h-[650px] overflow-y-auto">
-    {groupedPayments.map((group) => (
-      <div key={group.tenant.tenantId}>
-        <div 
-          className="flex items-center justify-between p-4 hover:bg-gray-50 cursor-pointer"
-          onClick={() => toggleTenantExpansion(group.tenant.tenantId)}
-        >
-          <div className="flex items-center space-x-3">
-            {expandedTenants.has(group.tenant.tenantId) ? (
-              <ChevronDown className="w-4 h-4 text-gray-400" />
-            ) : (
-              <ChevronRight className="w-4 h-4 text-gray-400" />
-            )}
-            <div>
-              <div className="font-medium text-gray-900">{group.tenant.tenantName}</div>
-              <div className="text-sm text-gray-500">
-                {group.payments.length} ພື້ນທີ່
-                {group.overdueCount > 0 && (
-                  <span className="ml-2 px-2 py-1 bg-red-100 text-red-800 rounded-full text-xs">
-                    {group.overdueCount} ເກີນກຳນົດ
-                  </span>
+              </div>
+
+              {filteredPayments.length === 0 && (
+                <div className="text-center py-12">
+                  <CreditCard className="w-16 h-16 mx-auto text-gray-400 mb-4" />
+                  <h3 className="text-lg font-medium text-gray-900 mb-2">
+                    ບໍ່ພົບລາຍການຊຳລະເງິນ
+                  </h3>
+                  <p className="text-gray-600">ບໍ່ມີລາຍການທີ່ຕົງກັບເງື່ອນໄຂການຄົ້ນຫາ</p>
+                </div>
+              )}
+            </div>
+          </>
+        ) : (
+          /* Tenant View */
+          <div className="divide-y divide-gray-200 max-h-[650px] overflow-y-auto">
+            {groupedPayments.map((group) => (
+              <div key={group.tenant.tenantId}>
+                <div 
+                  className="flex items-center justify-between p-4 hover:bg-gray-50 cursor-pointer"
+                  onClick={() => toggleTenantExpansion(group.tenant.tenantId)}
+                >
+                  <div className="flex items-center space-x-3">
+                    {expandedTenants.has(group.tenant.tenantId) ? (
+                      <ChevronDown className="w-4 h-4 text-gray-400" />
+                    ) : (
+                      <ChevronRight className="w-4 h-4 text-gray-400" />
+                    )}
+                    <div>
+                      <div className="font-medium text-gray-900">{group.tenant.tenantName}</div>
+                      <div className="text-sm text-gray-500">
+                        {group.payments.length} ພື້ນທີ່
+                        {group.overdueCount > 0 && (
+                          <span className="ml-2 px-2 py-1 bg-red-100 text-red-800 rounded-full text-xs">
+                            {group.overdueCount} ເກີນກຳນົດ
+                          </span>
+                        )}
+                      </div>
+                    </div>
+                  </div>
+                  <div className="text-right">
+                    <div className="font-bold text-gray-900">₭{group.totalDue.toLocaleString()}</div>
+                    <div className="text-sm text-gray-500">ລວມທັງໝົດ</div>
+                  </div>
+                </div>
+
+                {expandedTenants.has(group.tenant.tenantId) && (
+                  <div className="bg-gray-50 px-4">
+                    {group.payments.map((payment) => {
+                      const space = spaces.find(s => 
+                         s.id === payment.spaceId || s.id === payment.roomId
+                      );
+                      const originalAmount = payment.originalAmount || getPaymentAmount(payment);
+                      const totalAmount = originalAmount + (payment.lateFee || 0);
+
+                      return (
+                        <div key={payment.id || payment.paymentId} className="flex items-center justify-between py-3 border-b border-gray-200 last:border-b-0">
+                          <div className="flex items-center space-x-3">
+                            {getStatusIcon(payment)}
+                            <div>
+                              <div className="font-medium text-gray-900">{space?.spaceCode}</div>
+                              <div className="text-xs text-gray-500">
+                                <span className={`px-2 py-1 rounded-full ${getFrequencyColor(payment.paymentType)}`}>
+                                  {getFrequencyText(payment.paymentType)}
+                                </span>
+                                <span className="ml-2">{space?.spaceType}</span>
+                              </div>
+                            </div>
+                          </div>
+                          
+                          <div className="flex items-center space-x-4">
+                            <div className="text-right">
+                              <div className="font-medium text-gray-900">₭{totalAmount.toLocaleString()}</div>
+                              <div className="text-xs text-gray-500">
+                                {new Date(payment.dueDate).toLocaleDateString("lo-LA")}
+                              </div>
+                            </div>
+                            
+                            {activeTimeTab === "future" ? (
+                              <div className="text-xs text-gray-400">
+                                <span>ຍັງບໍ່ເຖິງເວລາ</span>
+                              </div>
+                            ) : (
+                              <button
+                                onClick={() => handleCollectPayment(payment)}
+                                className={`flex items-center space-x-1 px-3 py-1 rounded-lg transition-colors text-xs font-medium ${
+                                  payment.status === 'overdue'
+                                    ? "bg-red-50 hover:bg-red-100 text-red-700"
+                                    : "bg-green-50 hover:bg-green-100 text-green-700"
+                                }`}
+                              >
+                                <CreditCard className="w-3 h-3" />
+                                <span>ເກັບ</span>
+                              </button>
+                            )}
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
                 )}
               </div>
-            </div>
-          </div>
-          <div className="text-right">
-            <div className="font-bold text-gray-900">₭{group.totalDue.toLocaleString()}</div>
-            <div className="text-sm text-gray-500">ລວມທັງໝົດ</div>
-          </div>
-        </div>
-
-        {expandedTenants.has(group.tenant.tenantId) && (
-          <div className="bg-gray-50 px-4">
-            {group.payments.map((payment) => {
-              const space = spaces.find(s => 
-                 s.id === payment.spaceId || s.id === payment.roomId
-              );
-              const originalAmount = payment.originalAmount || getPaymentAmount(payment);
-              const totalAmount = originalAmount + (payment.lateFee || 0);
-
-              return (
-                <div key={payment.id || payment.paymentId} className="flex items-center justify-between py-3 border-b border-gray-200 last:border-b-0">
-                  <div className="flex items-center space-x-3">
-                    {getStatusIcon(payment)}
-                    <div>
-                      <div className="font-medium text-gray-900">{space?.spaceCode}</div>
-                      <div className="text-xs text-gray-500">
-                        <span className={`px-2 py-1 rounded-full ${getFrequencyColor(payment.paymentType)}`}>
-                          {getFrequencyText(payment.paymentType)}
-                        </span>
-                        <span className="ml-2">{space?.spaceType}</span>
-                      </div>
-                    </div>
-                  </div>
-                  
-                  <div className="flex items-center space-x-4">
-                    <div className="text-right">
-                      <div className="font-medium text-gray-900">₭{totalAmount.toLocaleString()}</div>
-                      <div className="text-xs text-gray-500">
-                        {new Date(payment.dueDate).toLocaleDateString("lo-LA")}
-                      </div>
-                    </div>
-                    
-                    {activeTimeTab === "future" ? (
-                      <div className="text-xs text-gray-400">
-                        <span>ຍັງບໍ່ເຖິງເວລາ</span>
-                      </div>
-                    ) : (
-                      <button
-                        onClick={() => handleCollectPayment(payment)}
-                        className={`flex items-center space-x-1 px-3 py-1 rounded-lg transition-colors text-xs font-medium ${
-                          payment.status === 'overdue'
-                            ? "bg-red-50 hover:bg-red-100 text-red-700"
-                            : "bg-green-50 hover:bg-green-100 text-green-700"
-                        }`}
-                      >
-                        <CreditCard className="w-3 h-3" />
-                        <span>ເກັບ</span>
-                      </button>
-                    )}
-                  </div>
-                </div>
-              );
-            })}
+            ))}
           </div>
         )}
-      </div>
-    ))}
-  </div>
-)}
 
         {(viewMode === "list" ? filteredPayments : groupedPayments).length === 0 && (
           <div className="text-center py-12">
