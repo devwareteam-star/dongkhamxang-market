@@ -10,6 +10,8 @@ import {
   Notification,
   SystemSettings,
   DashboardStats,
+  calculateLateFee, // ADD
+  calculateDaysOverdue, // ADD
 } from "@/types";
 import {
   spacesService,
@@ -18,6 +20,8 @@ import {
   billsService,
   usersService,
   notificationsService,
+  paidCollectionService,
+  StorageService,
 } from "@/lib/firebase/firestore";
 
 interface DataContextType {
@@ -25,11 +29,15 @@ interface DataContextType {
   spaces: Space[];
   tenants: Tenant[];
   payments: Payment[];
+  paidPayments: Payment[];
   bills: Bill[];
   users: User[];
   notifications: Notification[];
   settings: SystemSettings;
   loading: boolean;
+  // ADD: Late fee processing
+  processLateFees: () => Promise<void>;
+   loadPaidPayments: () => Promise<void>;
 
   // Space operations
   addSpace: (
@@ -52,8 +60,15 @@ interface DataContextType {
   addPayment: (
     payment: Omit<Payment, "paymentId" | "createdAt" | "updatedAt">
   ) => Promise<void>;
-  updatePayment: (id: string, payment: Partial<Payment>) => Promise<void>;
+updatePayment: (id: string, payment: Partial<Payment>, providedPayment?: Payment, paymentImage?: File) => Promise<void>;
   deletePayment: (id: string) => Promise<void>;
+  // Add new bulk payment handler
+  handleBulkPayments: (data: {
+    payments: Payment[];
+    paymentMethod: 'cash' | 'transfer';
+    notes?: string;
+    paymentImage?: File;
+  }) => Promise<Payment[]>;
 
   // Bill operations
   addBill: (
@@ -87,6 +102,9 @@ interface DataContextType {
     dueDate?: Date
   ) => Promise<void>;
 
+  // Delete
+  cleanupDuplicatePayments: () => Promise<void>;
+
   generatePaymentsForAllTenants: (
     paymentFrequency: "daily" | "monthly" | "yearly",
     dueDate?: Date
@@ -98,20 +116,35 @@ interface DataContextType {
   updateSettings: (settings: Partial<SystemSettings>) => void;
 }
 
+// Create magic backpack 
 const DataContext = createContext<DataContextType | undefined>(undefined);
 
+// Rulebook of school, ex: class at 8am, lunch $5
 const defaultSettings: SystemSettings = {
   marketInfo: {
-    name: "ຕະຫຼາດສົດເວຍງຈັນ",
-    address: "123 ຖະໜົນ ສະຫະມິດໄມ, ເມືອງຈັນທະບູລີ, ນະຄອນຫຼວງວຽງຈັນ",
+    name: "ຕະຫຼາດດົງຄໍາຊ້າງ",
+    address: "ບ້ານ ດົງຄໍາຊ້າງ, ເມືອງ ສີສັກຕະນາກ, ນະຄອນຫຼວງວຽງຈັນ",
     phone: "+856 21 234567",
     email: "info@vientiane-market.la",
     taxId: "1234567890",
   },
   defaultRates: {
-    dailyRate: 50000, // 50,000 KIP
-    monthlyRate: 1200000, // 1,200,000 KIP
-    yearlyRate: 12000000, // 12,000,000 KIP
+    dailyRate: 50000,
+    monthlyRate: 1200000,
+    yearlyRate: 12000000,
+     qrCodeImageUrl: undefined, // Add this
+    qrCodeImagePath: undefined, // Add this
+  },
+
+  // Add late fee defaults
+  lateFees: {
+    tier1: { days: 1, rate: 0.01 }, // 1% after 1 day
+    tier2: { days: 3, rate: 0.02 }, // 2% after 3 days
+    tier3: { days: 7, rate: 0.05 }, // 5% after 7 days
+    tier4: { days: 30, rate: 0.1 }, // 10% after 30 days
+    tier5: { days: 90, rate: 0.25 }, // 25% after 90 days
+    enableLateFees: true,
+    gracePeriodDays: 0,
   },
   notifications: {
     enableEmail: true,
@@ -120,9 +153,9 @@ const defaultSettings: SystemSettings = {
     overdueReminderDays: 7,
   },
   receipt: {
-    prefix: "VTM",
+    prefix: "DXM",
     includeQR: true,
-    footer: "ຂອບໃຈທີ່ໃຊ້ບໍລິການ - ຕະຫຼາດສົດເວຍງຈັນ",
+    footer: "ຂອບໃຈທີ່ໃຊ້ບໍລິການ - ຕະຫຼາດດົງຄໍາຊ້າງ",
     template: "standard",
   },
   system: {
@@ -140,6 +173,7 @@ const defaultSettings: SystemSettings = {
   },
 };
 
+// Component wrapper, a magic backpack supplier make sure everyone access tools in this backpack
 export const DataProvider: React.FC<{ children: React.ReactNode }> = ({
   children,
 }) => {
@@ -147,6 +181,7 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({
   const [spaces, setSpaces] = useState<Space[]>([]);
   const [tenants, setTenants] = useState<Tenant[]>([]);
   const [payments, setPayments] = useState<Payment[]>([]);
+  const [paidPayments, setPaidPayments] = useState<Payment[]>([]);
   const [bills, setBills] = useState<Bill[]>([]);
   const [users, setUsers] = useState<User[]>([]);
   const [notifications, setNotifications] = useState<Notification[]>([]);
@@ -158,36 +193,23 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({
     loadData();
   }, []);
 
-  // Utility function to convert Firebase Timestamps
+  // Utility function to convert Firebase Timestamps, ex: it's like translate firebase(foreign language) to readable English Langauge
   const convertTimestamps = (obj: any) => {
-    const converted = { ...obj };
-    Object.keys(converted).forEach((key) => {
-      if (
-        converted[key] &&
-        typeof converted[key] === "object" &&
-        converted[key].toDate
+    const converted = { ...obj };           // 1. Create copy
+    Object.keys(converted).forEach((key) => {  // 2. Iterate properties
+      if (                                  // 3. Check conditions
+        converted[key] &&                   // Not null/undefined
+        typeof converted[key] === "object" &&  // Is object
+        converted[key].toDate               // Has toDate method
       ) {
-        converted[key] = converted[key].toDate();
+        converted[key] = converted[key].toDate();  // 4. Convert
       }
     });
-    return converted;
+    return converted;                       // 5. Return modified copy
   };
 
-  // Helper functions for payment processing
-  const mapPaymentStatusToEnglish = (
-    laoStatus: string
-  ): "pending" | "paid" | "overdue" | "partial" => {
-    const mapping: Record<string, "pending" | "paid" | "overdue" | "partial"> =
-      {
-        ລໍຖ້າ: "pending",
-        ຈ່າຍແລ້ວ: "paid",
-        ເກີນກຳນົດ: "overdue",
-        ຈ່າຍບາງສ່ວນ: "partial",
-      };
-    return mapping[laoStatus] || "pending";
-  };
-
-  const inferPaymentType = (
+  // Legacy. Guess the  paymentFrequency, 1. find tenant, 2. find spaces, 3. calculate monthly rent & final guess from calculated amount
+ const inferPaymentType = (
     payment: any,
     tenantsList: Tenant[],
     spacesList: Space[]
@@ -216,8 +238,9 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({
     if (ratio >= 12) return "yearly"; // 12x monthly = yearly
     if (ratio <= 0.5) return "daily"; // Less than half monthly = daily
     return "monthly"; // Default to monthly
-  };
+  }; 
 
+  // This function check the old data fields and new data fields to make it match even tho the system changed or updated in the future
   const enhancePaymentWithLegacyFields = (
     payment: any,
     tenantsList: Tenant[],
@@ -227,20 +250,40 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({
       ...payment,
       // Legacy compatibility computed fields
       id: payment.paymentId || payment.id,
-      roomId: payment.spaceIds?.[0] || "",
+      roomId: payment.spaceId || "",
       amount: payment.amountDue || 0,
-      status: mapPaymentStatusToEnglish(payment.paymentStatus || "ລໍຖ້າ"),
+      status: payment.paymentStatus || "pending", // Direct mapping since we're using English now
       paidDate: payment.paymentDate,
-      paymentType: inferPaymentType(payment, tenantsList, spacesList),
+      paymentType:
+        payment.paymentFrequency ||
+        payment.paymentType ||
+        inferPaymentType(payment, tenantsList, spacesList),
     };
   };
 
-  // Load data function
+  // Add function to load paid payments. this function is like take someone to get paidPayments in storage room and put it in magic backpack
+const loadPaidPayments = async () => {
+  try {
+    const paidData = await paidCollectionService.getAll();
+    const enhancedPaidPayments = paidData
+      .map(convertTimestamps)
+      .map((payment) =>
+        enhancePaymentWithLegacyFields(payment, tenants, spaces)
+      );
+    setPaidPayments(enhancedPaidPayments as Payment[]);
+  } catch (error) {
+    console.error("Error loading paid payments:", error);
+  }
+};
+
+  // *Load data function, is like the grand opening day of school when you need to get ALL the supplies from different storage rooms and set up everything before students arrive!
   const loadData = async () => {
     try {
       setLoading(true);
       console.log("Loading data from Firebase...");
 
+
+      // send 6 people to get data from firebase
       const [
         spacesData,
         tenantsData,
@@ -256,6 +299,7 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({
         usersService.getAll(),
         notificationsService.getAll(),
       ]);
+      
 
       // Convert timestamps first
       const processedSpaces = spacesData.map(convertTimestamps) as Space[];
@@ -277,11 +321,27 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({
         );
       setPayments(enhancedPayments as Payment[]);
 
+// Process late fees AFTER setting payments
+if (enhancedPayments.length > 0) {
+  setTimeout(async () => {
+    try {
+      // Pass the payments array directly instead of relying on state
+      console.log("Processing late fees with", enhancedPayments.length, "payments");
+      await processLateFees(enhancedPayments);
+    } catch (error) {
+      console.error("Failed to process late fees:", error);
+    }
+  }, 1000); // Reduced delay since we know data is ready
+}
+
       setBills(billsData.map(convertTimestamps) as Bill[]);
       setUsers(usersData.map(convertTimestamps) as User[]);
       setNotifications(
         notificationsData.map(convertTimestamps) as Notification[]
       );
+       await loadPaidPayments();
+
+    
 
       console.log("Data loaded successfully from Firebase");
     } catch (error) {
@@ -291,67 +351,601 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({
     }
   };
 
-  // Payment generation functions
-const generatePaymentsForTenant = async (
-  tenantBusinessId: string, 
-  paymentFrequency?: 'daily' | 'monthly' | 'yearly', // Make optional
+
+  // Load Image from setting
+  useEffect(() => {
+  const loadSettings = async () => {
+    try {
+      const { doc, getDoc, getFirestore } = await import('firebase/firestore');
+      const db = getFirestore();
+      const settingsDoc = await getDoc(doc(db, 'systemSettings', 'main'));
+      
+      if (settingsDoc.exists()) {
+        const savedSettings = settingsDoc.data() as SystemSettings;
+        setSettings(savedSettings);
+        console.log('Settings loaded from database:', savedSettings);
+      } else {
+        console.log('No saved settings found, using defaults');
+      }
+    } catch (error) {
+      console.error('Error loading settings:', error);
+    }
+  };
+  
+  loadSettings();
+}, []);
+
+  // **Payment generation functions, 1. check tenant, 2. check space, 3. Checks what bills already exist (to avoid duplicates), 4. Calculates when the next bill is due & 5. Creates new bills for each space they rent
+  const generatePaymentsForTenant = async (
+  tenantBusinessId: string,
+  paymentFrequency?: "daily" | "monthly" | "yearly",
   dueDate: Date = new Date(),
   providedTenant?: Tenant
 ) => {
   try {
-    const tenant = providedTenant || tenants.find(t => t.tenantId === tenantBusinessId);
+    const tenant =
+      providedTenant || tenants.find((t) => t.tenantId === tenantBusinessId);
     if (!tenant) throw new Error(`Tenant ${tenantBusinessId} not found`);
 
-    const tenantSpaces = spaces.filter(s => tenant.allSpace?.includes(s.id));
-    if (tenantSpaces.length === 0) throw new Error(`No spaces found for tenant ${tenantBusinessId}`);
+    const tenantSpaces = spaces.filter((s) =>
+      tenant.allSpace?.includes(s.id)
+    );
+    if (tenantSpaces.length === 0)
+      throw new Error(`No spaces found for tenant ${tenantBusinessId}`);
 
-    // Group spaces by their payment frequency
-    const spacesByFrequency = tenantSpaces.reduce((acc, space) => {
-      const frequency = space.paymentFrequency || 'monthly';
-      if (!acc[frequency]) acc[frequency] = [];
-      acc[frequency].push(space);
-      return acc;
-    }, {} as Record<string, Space[]>);
+    // Frequency-Specific Period Calculation
+    const now = new Date();
+    const currentYear = now.getFullYear().toString();
+    const currentMonth = `${now.getFullYear()}-${String(
+      now.getMonth() + 1
+    ).padStart(2, "0")}`;
+    const currentDay = `${now.getFullYear()}-${String(
+      now.getMonth() + 1
+    ).padStart(2, "0")}-${String(now.getDate()).padStart(2, "0")}`;
 
-    // Generate separate payment for each frequency
-    for (const [frequency, spacesForFrequency] of Object.entries(spacesByFrequency)) {
-      // Skip if specific frequency requested and doesn't match
-      if (paymentFrequency && frequency !== paymentFrequency) continue;
+    let paymentsGenerated = 0;
+    console.log(
+      `🔄 Generating payments for tenant ${tenantBusinessId} - ${tenantSpaces.length} spaces found`
+    );
 
-      const monthlyTotal = spacesForFrequency.reduce((sum, space) => sum + space.baseRentMonthly, 0);
-      let amountDue = monthlyTotal;
-      
-      if (frequency === 'yearly') amountDue = monthlyTotal * 12;
-      else if (frequency === 'daily') amountDue = Math.round(monthlyTotal / 30);
+    // Generate individual payment for each space
+// Generate individual payment for each space
+for (const space of tenantSpaces) {
+  const frequency = space.paymentFrequency || "monthly";
 
-      const paymentData = {
-        contractId: '',
-  spaceIds: spacesForFrequency.map(s => s.id),
-  tenantId: tenantBusinessId,
-  paymentPeriod: `${dueDate.getFullYear()}-${String(dueDate.getMonth() + 1).padStart(2, '0')}`,
-  dueDate,
-  amountDue,
-  paymentStatus: 'ລໍຖ້າ' as const,
-  paymentFrequency: frequency as 'daily' | 'monthly' | 'yearly',
-  notes: `${frequency} payment for ${spacesForFrequency.map(s => s.spaceCode).join(', ')}`,
-  paymentConfirmed: false,
-  
-  // Add missing legacy fields required by Payment interface
-  id: '', // Will be set by addPayment
-  roomId: spacesForFrequency[0]?.id || '', // Legacy field - use first space ID
-  amount: amountDue, // Legacy field - same as amountDue
-  status: 'pending' as const, // Legacy field - English version of paymentStatus
-  paymentType: frequency as 'daily' | 'monthly' | 'yearly', // Legacy field - same as paymentFrequency
-      };
+  // Skip if specific frequency requested and doesn't match
+  if (paymentFrequency && frequency !== paymentFrequency) {
+    console.log(
+      `⏭️  Skipping space ${space.spaceCode} - frequency mismatch (${frequency} vs ${paymentFrequency})`
+    );
+    continue;
+  }
 
-      await addPayment(paymentData);
+  // STEP 1: Calculate next due date and period FIRST
+  const lastPaidPayment = [...payments, ...paidPayments]
+    .filter(
+      (p) =>
+        p.spaceId === space.id &&
+        p.tenantId === tenantBusinessId &&
+        p.paymentStatus === "paid" &&
+        p.paymentFrequency === frequency
+    )
+    .sort(
+      (a, b) => 
+        new Date(b.dueDate || b.paymentDate).getTime() -
+        new Date(a.dueDate || a.paymentDate).getTime()
+    )[0];
+
+  let nextDueDate = new Date(dueDate);
+  let calculatedPeriod = "";
+
+  if (lastPaidPayment) {
+    // Calculate from last paid payment's due date
+    const lastDueDate = new Date(
+      lastPaidPayment.dueDate || lastPaidPayment.paymentDate
+    );
+
+    switch (frequency) {
+      case "daily":
+        nextDueDate = new Date(lastDueDate);
+        nextDueDate.setDate(nextDueDate.getDate() + 1);
+        calculatedPeriod = `${nextDueDate.getFullYear()}-${String(
+          nextDueDate.getMonth() + 1
+        ).padStart(2, "0")}-${String(nextDueDate.getDate()).padStart(2, "0")}`;
+        break;
+        
+      case "monthly":
+        nextDueDate = new Date(lastDueDate);
+        nextDueDate.setDate(nextDueDate.getDate() + 30);
+        calculatedPeriod = `${nextDueDate.getFullYear()}-${String(
+          nextDueDate.getMonth() + 1
+        ).padStart(2, "0")}`;
+        break;
+        
+      case "yearly":
+        nextDueDate = new Date(lastDueDate);
+        nextDueDate.setDate(nextDueDate.getDate() + 365);
+        calculatedPeriod = nextDueDate.getFullYear().toString();
+        break;
+    }
+  } else {
+    // First payment - use provided dueDate
+    switch (frequency) {
+      case "daily":
+        nextDueDate = new Date(dueDate);
+        calculatedPeriod = `${nextDueDate.getFullYear()}-${String(
+          nextDueDate.getMonth() + 1
+        ).padStart(2, "0")}-${String(nextDueDate.getDate()).padStart(2, "0")}`;
+        break;
+
+      case "monthly":
+        nextDueDate = new Date(dueDate);
+        calculatedPeriod = `${nextDueDate.getFullYear()}-${String(
+          nextDueDate.getMonth() + 1
+        ).padStart(2, "0")}`;
+        break;
+
+      case "yearly":
+        nextDueDate = new Date(dueDate);
+        calculatedPeriod = nextDueDate.getFullYear().toString();
+        break;
+    }
+  }
+
+  console.log(`🔍 Checking for period: ${calculatedPeriod}, frequency: ${frequency}`);
+
+  // STEP 2: Now check for duplicates using the CALCULATED period
+  const hasExistingPayment = [...payments, ...paidPayments].some((p) => {
+    if (p.spaceId !== space.id || p.tenantId !== tenantBusinessId) {
+      return false;
+    }
+
+    // Check if payment exists for the CALCULATED period (not current period)
+    const isDuplicate = p.paymentPeriod === calculatedPeriod && p.paymentFrequency === frequency;
+    
+    if (isDuplicate) {
+      console.log(`🔍 Found existing payment:`, {
+        paymentId: p.paymentId || p.id,
+        period: p.paymentPeriod,
+        status: p.paymentStatus,
+        collection: payments.includes(p) ? 'payments' : 'paidPayments'
+      });
+    }
+    
+    return isDuplicate;
+  });
+
+  if (hasExistingPayment) {
+    console.log(
+      `⏭️  Skipping space ${space.spaceCode} - payment already exists for period ${calculatedPeriod}`
+    );
+    continue;
+  }
+
+  // Validate that the calculated due date makes sense
+  const todayTime = new Date().getTime();
+  const calculatedTime = nextDueDate.getTime();
+
+  // Skip if due date is in the past (shouldn't happen with proper logic)
+  if (calculatedTime < todayTime - 24 * 60 * 60 * 1000) {
+    console.log(
+      `⚠️  Skipping space ${space.spaceCode} - calculated due date is too far in the past: ${nextDueDate.toLocaleDateString()}`
+    );
+    continue;
+  }
+
+  // Calculate amount based on frequency
+  let amountDue = 0;
+  switch (frequency) {
+    case "yearly":
+      amountDue = space.baseRentMonthly * 12;
+      break;
+    case "daily":
+      amountDue = Math.round(space.baseRentMonthly / 30);
+      break;
+    case "monthly":
+    default:
+      amountDue = space.baseRentMonthly;
+      break;
+  }
+
+  // Validate amount
+  if (amountDue <= 0) {
+    console.warn(
+      `⚠️  Skipping space ${space.spaceCode} - invalid amount: ${amountDue}`
+    );
+    continue;
+  }
+
+  console.log(`✨ Creating payment for space ${space.spaceCode}, period: ${calculatedPeriod}, due: ${nextDueDate.toLocaleDateString()}`);
+
+  const paymentData = {
+    spaceId: space.id,
+    spaceCode: space.spaceCode,
+    tenantId: tenantBusinessId,
+    paymentPeriod: calculatedPeriod,
+    dueDate: nextDueDate,
+    originalDueDate: nextDueDate,
+    amountDue,
+    originalAmount: amountDue,
+    lateFee: 0,
+    lateFeeRate: null,
+    lateFeeApplied: false,
+    daysOverdue: 0,
+    paymentStatus: "pending" as const,
+    paymentFrequency: frequency as "daily" | "monthly" | "yearly",
+    notes: `${
+      frequency.charAt(0).toUpperCase() + frequency.slice(1)
+    } payment for space ${space.spaceCode} (${
+      space.spaceType || "Unknown type"
+    }) - Period: ${calculatedPeriod}`,
+
+    // Legacy fields for compatibility
+    id: "",
+    roomId: space.id,
+    amount: amountDue,
+    status: "pending" as const,
+    paymentType: frequency as "daily" | "monthly" | "yearly",
+  };
+
+  try {
+    await addPayment(paymentData);
+    paymentsGenerated++;
+    console.log(
+      `✅ Generated ${frequency} payment for space ${
+        space.spaceCode
+      }: ₭${amountDue.toLocaleString()} - Due: ${nextDueDate.toLocaleDateString()} - Period: ${calculatedPeriod}`
+    );
+
+    // Update space payment status
+    await updateSpace(space.id, {
+      paymentStatus: {
+        currentStatus: "pending",
+        currentPeriodPaid: false,
+        nextDueDate: nextDueDate,
+        lateFee: 0,
+        lateFeeApplied: false,
+        daysOverdue: 0,
+        lastUpdated: new Date(),
+      },
+    });
+  } catch (paymentError) {
+    console.error(
+      `❌ Failed to generate payment for space ${space.spaceCode}:`,
+      paymentError
+    );
+    continue;
+  }
+}
+
+    if (paymentsGenerated > 0) {
+      console.log(
+        `🎉 Successfully generated ${paymentsGenerated} payments for tenant ${tenantBusinessId}`
+      );
+    } else {
+      console.log(
+        `ℹ️  No new payments generated for tenant ${tenantBusinessId} - all applicable periods already covered`
+      );
     }
   } catch (error) {
-    console.error('Error generating payment for tenant:', error);
+    console.error(
+      `❌ Error generating payments for tenant ${tenantBusinessId}:`,
+      error
+    );
     throw error;
   }
 };
 
+  // *Enhanced utility function to clean up duplicate payments (run once to fix existing data), Step 1: Group similar payments together, Step 2: Find groups with duplicates, Step 3: Keep the oldest, delete the rest
+  const cleanupDuplicatePayments = async () => {
+    console.log("Starting duplicate payment cleanup...");
+
+    // Group payments by tenant, space, frequency, and period
+    const paymentGroups = new Map<string, Payment[]>();
+
+    payments.forEach((payment) => {
+      const key = `${payment.tenantId}-${payment.spaceId}-${payment.paymentFrequency}-${payment.paymentPeriod}`;
+
+      if (!paymentGroups.has(key)) {
+        paymentGroups.set(key, []);
+      }
+      paymentGroups.get(key)!.push(payment);
+    });
+
+    // Find and remove duplicates (keep the oldest one)
+    let duplicatesRemoved = 0;
+
+    // Use Array.from to iterate over Map entries for TypeScript compatibility
+    for (const [key, groupPayments] of Array.from(paymentGroups.entries())) {
+      if (groupPayments.length > 1) {
+        // Sort by creation date, keep the first one
+        groupPayments.sort(
+          (a: Payment, b: Payment) =>
+            new Date(a.createdAt || 0).getTime() -
+            new Date(b.createdAt || 0).getTime()
+        );
+
+        // Remove duplicates (skip the first one)
+        for (let i = 1; i < groupPayments.length; i++) {
+          try {
+            await deletePayment(
+              groupPayments[i].paymentId || groupPayments[i].id
+            );
+            duplicatesRemoved++;
+            console.log(`Removed duplicate payment: ${key}`);
+          } catch (error) {
+            console.error(`Failed to remove duplicate payment:`, error);
+          }
+        }
+      }
+    }
+
+    console.log(
+      `Cleanup complete: Removed ${duplicatesRemoved} duplicate payments`
+    );
+  };
+
+  // Step 1: Prepare the data for the "finished" cabinet, Step 2: Put it in the "finished work" cabinet,  Step 3: Remove from "to-do" cabinet & Step 4: Update your memory immediately
+const movePaymentToPaidCollection = async (
+  payment: Payment, 
+  updatedData: Partial<Payment>,
+  paymentImage?: File
+) => {
+  try {
+    console.log('movePaymentToPaidCollection called with image:', !!paymentImage); // Debug log
+    
+    let imageData = {};
+    if (paymentImage) {
+      console.log('Uploading payment image...', paymentImage.name, paymentImage.size);
+      const { downloadURL, path } = await StorageService.uploadPaymentImage(
+        paymentImage, 
+        payment.paymentId || payment.id // FIX: Use payment's ID, not undefined 'id'
+      );
+      imageData = { 
+        paymentImageUrl: downloadURL, 
+        paymentImagePath: path 
+      };
+      
+      // Delete old image if it exists
+      if (payment.paymentImagePath) {
+        await StorageService.deletePaymentImage(payment.paymentImagePath);
+      }
+      
+      console.log('Payment image uploaded successfully');
+    } else {
+      console.log('No payment image provided to movePaymentToPaidCollection');
+    }
+
+    const paidPaymentData = {
+      ...payment,
+      ...updatedData,
+      ...imageData,
+      originalPaymentId: payment.paymentId || payment.id,
+      movedToPaidAt: new Date(),
+    };
+
+    const { id, ...cleanPaidData } = paidPaymentData;
+
+    // Step 1: Create in paidCollection
+    const newPaidPayment = await paidCollectionService.create(cleanPaidData);
+
+    // Step 2: Delete from payments collection  
+    await paymentsService.delete(payment.paymentId || payment.id);
+
+    // Step 3: Update local state IMMEDIATELY
+    setPayments((prev) =>
+      prev.filter((p) => (p.paymentId || p.id) !== (payment.paymentId || payment.id))
+    );
+    
+    // Step 4: Add to paidPayments state IMMEDIATELY
+    setPaidPayments((prev) => [...prev, convertTimestamps(newPaidPayment) as Payment]);
+
+    console.log("Payment moved to paid collection successfully");
+    return true;
+  } catch (error) {
+    console.error("Failed to move payment to paid collection:", error);
+    throw error;
+  }
+};
+
+  // Debug version of processLateFees function - CORRECTED, Step 1: Check if late fees are even turned on, Step 2: Find overdue payments & Step 3: Process each overdue payment For each overdue payment.
+const processLateFees = async (paymentsToProcess = payments) => {
+  console.log("🔍 DEBUG: Total payments in array:", paymentsToProcess.length);
+  console.log("🔍 DEBUG: Sample payment dates:", paymentsToProcess.slice(0, 2).map(p => ({
+    id: p.paymentId || p.id,
+    dueDate: p.dueDate,
+    dueDateType: typeof p.dueDate,
+    originalDueDate: p.originalDueDate,
+    paymentStatus: p.paymentStatus
+  })));
+  console.log("🔍 DEBUG: Starting late fee processing...");
+
+  try {
+    // Check if late fees are enabled
+    if (!settings.lateFees.enableLateFees) {
+      console.log("❌ DEBUG: Late fees are disabled in settings");
+      return;
+    }
+    console.log("✅ DEBUG: Late fees are enabled");
+    console.log("📊 DEBUG: Settings:", {
+      enableLateFees: settings.lateFees.enableLateFees,
+      gracePeriodDays: settings.lateFees.gracePeriodDays,
+      tier1: settings.lateFees.tier1,
+      tier2: settings.lateFees.tier2,
+      tier3: settings.lateFees.tier3,
+      tier4: settings.lateFees.tier4,
+      tier5: settings.lateFees.tier5,
+    });
+
+    // Filter for actually overdue payments only
+    const unpaidPayments = paymentsToProcess.filter((p) => {
+      if (p.paymentStatus === "paid") return false;
+      
+      const today = new Date();
+      const todayStart = new Date(today.getFullYear(), today.getMonth(), today.getDate());
+      const dueDate = new Date(p.originalDueDate || p.dueDate);
+      
+      return dueDate < todayStart; // Only process overdue payments
+    });
+
+    console.log(`🔍 DEBUG: Found ${unpaidPayments.length} overdue payments`);
+    console.log(
+      "📋 DEBUG: Unpaid payments details:",
+      unpaidPayments.map((p) => ({
+        id: p.paymentId || p.id,
+        spaceId: p.spaceId,
+        tenantId: p.tenantId,
+        status: p.paymentStatus,
+        originalDueDate: p.originalDueDate,
+        currentLateFee: p.lateFee,
+        originalAmount: p.originalAmount,
+      }))
+    );
+
+    if (unpaidPayments.length === 0) {
+      console.log("ℹ️ DEBUG: No overdue payments found, exiting");
+      return;
+    }
+
+    // Process each payment
+    for (const payment of unpaidPayments) {
+      console.log(
+        `\n🔄 DEBUG: Processing payment ${payment.paymentId || payment.id}`
+      );
+      console.log("📅 DEBUG: Payment details:", {
+        spaceId: payment.spaceId,
+        originalDueDate: payment.originalDueDate,
+        paymentStatus: payment.paymentStatus,
+        originalAmount: payment.originalAmount,
+        currentLateFee: payment.lateFee,
+      });
+
+      // Test the calculateDaysOverdue function
+      const today = new Date();
+      console.log("📅 DEBUG: Date comparison:", {
+        today: today.toISOString(),
+        originalDueDate: payment.originalDueDate,
+        originalDueDateISO: new Date(payment.originalDueDate).toISOString(),
+      });
+
+      const daysOverdue = calculateDaysOverdue(payment.originalDueDate);
+      console.log(`📊 DEBUG: Days overdue calculated: ${daysOverdue}`);
+
+      if (daysOverdue <= settings.lateFees.gracePeriodDays) {
+        console.log(
+          `⏭️ DEBUG: Skipping payment - ${daysOverdue} days is within grace period of ${settings.lateFees.gracePeriodDays} days`
+        );
+        continue;
+      }
+
+      console.log(
+        `⚠️ DEBUG: Payment is ${daysOverdue} days overdue (beyond grace period)`
+      );
+
+      // Test the calculateLateFee function
+      const lateFeeResult = calculateLateFee(
+        payment.originalAmount,
+        daysOverdue,
+        settings
+      );
+
+      console.log("💰 DEBUG: Late fee calculation result:", lateFeeResult);
+
+      // Check if late fee changed
+      const hasChanged =
+        lateFeeResult.lateFee !== payment.lateFee ||
+        lateFeeResult.rate !== payment.lateFeeRate;
+      console.log(`🔄 DEBUG: Late fee changed? ${hasChanged}`);
+      console.log("📊 DEBUG: Comparison:", {
+        newLateFee: lateFeeResult.lateFee,
+        oldLateFee: payment.lateFee,
+        newRate: lateFeeResult.rate,
+        oldRate: payment.lateFeeRate,
+      });
+
+      if (!hasChanged) {
+        console.log("⏭️ DEBUG: No changes needed, skipping update");
+        continue;
+      }
+
+      // Prepare update data with proper types
+      const updateData: Partial<Payment> = {
+        lateFee: lateFeeResult.lateFee,
+        lateFeeRate: lateFeeResult.rate,
+        lateFeeApplied: lateFeeResult.lateFee > 0,
+        amountDue: payment.originalAmount + lateFeeResult.lateFee,
+        daysOverdue,
+        paymentStatus: "overdue" as "pending" | "paid" | "overdue" | "partial",
+      };
+
+      console.log("📝 DEBUG: Update data prepared:", updateData);
+
+      try {
+        console.log(
+          `🔄 DEBUG: Attempting to update payment ${
+            payment.paymentId || payment.id
+          }...`
+        );
+
+        await updatePayment(payment.paymentId || payment.id, updateData, payment);
+
+        console.log(
+          `✅ DEBUG: Successfully updated payment ${
+            payment.paymentId || payment.id
+          }`
+        );
+
+        // Update corresponding space status with proper types
+        const space = spaces.find((s) => s.id === payment.spaceId);
+        if (space) {
+          console.log(`🏢 DEBUG: Updating space ${space.id} status...`);
+
+          const spaceUpdateData: Partial<Space> = {
+            paymentStatus: {
+              currentStatus: "overdue" as "no_tenant" | "pending" | "paid" | "overdue",
+              currentPeriodPaid: space.paymentStatus?.currentPeriodPaid ?? false,
+              nextDueDate: space.paymentStatus?.nextDueDate,
+              lateFee: lateFeeResult.lateFee,
+              lateFeeApplied: lateFeeResult.lateFee > 0,
+              daysOverdue,
+              lastUpdated: new Date(),
+            },
+          };
+
+          console.log("🏢 DEBUG: Space update data:", spaceUpdateData);
+
+          await updateSpace(space.id, spaceUpdateData);
+          console.log(`✅ DEBUG: Successfully updated space ${space.id}`);
+        } else {
+          console.log(
+            `⚠️ DEBUG: Space not found for payment ${payment.spaceId}`
+          );
+        }
+      } catch (updateError: any) {
+        console.error(
+          `❌ DEBUG: Failed to update payment ${
+            payment.paymentId || payment.id
+          }:`,
+          updateError
+        );
+        console.error("❌ DEBUG: Update error details:", {
+          message: updateError?.message || "Unknown error",
+          stack: updateError?.stack || "No stack trace",
+        });
+      }
+    }
+
+    console.log("🎉 DEBUG: Late fee processing completed");
+  } catch (error: any) {
+    console.error("❌ DEBUG: Error in processLateFees:", error);
+    console.error("❌ DEBUG: Error details:", {
+      message: error?.message || "Unknown error",
+      stack: error?.stack || "No stack trace",
+    });
+  }
+};
+
+// Step 1: Find all active tenants& Step 2: Generate payments for each tenant one by one
   const generatePaymentsForAllTenants = async (
     paymentFrequency: "daily" | "monthly" | "yearly",
     dueDate: Date = new Date()
@@ -362,24 +956,11 @@ const generatePaymentsForTenant = async (
       );
 
       for (const tenant of activeTenants) {
-        // Check if payment already exists for this period
-        const paymentPeriod = `${dueDate.getFullYear()}-${String(
-          dueDate.getMonth() + 1
-        ).padStart(2, "0")}`;
-        const existingPayment = payments.find(
-          (p) =>
-            p.tenantId === tenant.tenantId &&
-            p.paymentPeriod === paymentPeriod &&
-            inferPaymentType(p, tenants, spaces) === paymentFrequency
+        await generatePaymentsForTenant(
+          tenant.tenantId,
+          paymentFrequency,
+          dueDate
         );
-
-        if (!existingPayment) {
-          await generatePaymentsForTenant(
-            tenant.tenantId,
-            paymentFrequency,
-            dueDate
-          );
-        }
       }
 
       console.log(
@@ -391,7 +972,7 @@ const generatePaymentsForTenant = async (
     }
   };
 
-  // Space operations
+  // Space operations. Step 1: Check for duplicates, Step 2: Create in database & Step 3: Update local memory for real-time website display
   const addSpace = async (
     spaceData: Omit<
       Space,
@@ -419,30 +1000,32 @@ const generatePaymentsForTenant = async (
     }
   };
 
+  // Step 1: Check if space exists, Step 2: Update database first & Step 3: Update local memory
   const updateSpace = async (id: string, spaceUpdate: Partial<Space>) => {
-  try {
-    const existingSpace = spaces.find((s) => s.id === id);
-    if (!existingSpace) {
-      throw new Error("Space not found");
+    try {
+      const existingSpace = spaces.find((s) => s.id === id);
+      if (!existingSpace) {
+        throw new Error("Space not found");
+      }
+
+      // Update in database first
+      await spacesService.update(id, spaceUpdate);
+
+      // Then update local state synchronously
+      setSpaces((prev) =>
+        prev.map((space) =>
+          space.id === id ? { ...space, ...spaceUpdate } : space
+        )
+      );
+
+      console.log("Space updated:", id);
+    } catch (error) {
+      console.error("Error updating space:", error);
+      throw error;
     }
+  };
 
-    // Update in database first
-    await spacesService.update(id, spaceUpdate);
-    
-    // Then update local state synchronously
-    setSpaces((prev) =>
-      prev.map((space) =>
-        space.id === id ? { ...space, ...spaceUpdate } : space
-      )
-    );
-
-    console.log("Space updated:", id);
-  } catch (error) {
-    console.error("Error updating space:", error);
-    throw error;
-  }
-};
-
+  // Delete space
   const deleteSpace = async (id: string) => {
     try {
       await spacesService.delete(id);
@@ -454,146 +1037,18 @@ const generatePaymentsForTenant = async (
     }
   };
 
-  // Tenant operations
-const addTenant = async (
-  tenantData: Omit<Tenant, "tenantId" | "createdAt" | "createdBy">
-) => {
-  try {
-    // Check if any assigned spaces are already occupied
-    if (tenantData.allSpace && tenantData.allSpace.length > 0) {
-      const conflictingSpaces = spaces.filter(
-        (space) =>
-          tenantData.allSpace.includes(space.id) &&
-          space.status === "ເຊົ່າແລ້ວ" &&
-          space.currentTenantId
-      );
-
-      if (conflictingSpaces.length > 0) {
-        const conflictCodes = conflictingSpaces
-          .map((s) => s.spaceCode)
-          .join(", ");
-        throw new Error(
-          `ພື້ນທີ່ ${conflictCodes} ຖືກເຊົ່າແລ້ວໂດຍຜູ້ເຊົ່າອື່ນ`
-        );
-      }
-    }
-
-    // Create the tenant record
-    const newTenant = await tenantsService.create({
-      ...tenantData,
-      createdBy: 1,
-    });
-
-    console.log('Created tenant:', newTenant);
-
-    // Convert and prepare for local state
-    const newTenantConverted = convertTimestamps(newTenant) as Tenant;
-    
-    // Add to local state immediately
-    setTenants((prev) => [...prev, newTenantConverted]);
-
-    // Update all assigned spaces to mark them as occupied
-    if (tenantData.allSpace && tenantData.allSpace.length > 0) {
-      const spaceUpdatePromises = tenantData.allSpace.map(async (spaceId) => {
-        try {
-          const spaceUpdate = {
-            status: "ເຊົ່າແລ້ວ" as const,
-            currentTenantId: newTenant.tenantId,
-            currentTenantName: newTenant.tenantName ,
-
-            updatedAt: new Date(),
-          };
-
-          await spacesService.update(spaceId, spaceUpdate);
-
-          // Update local state
-          setSpaces((prev) =>
-            prev.map((space) =>
-              space.id === spaceId ? { ...space, ...spaceUpdate } : space
-            )
-          );
-        } catch (error) {
-          console.error(`Failed to update space ${spaceId}:`, error);
-          throw new Error(`ບໍ່ສາມາດອັບເດດພື້ນທີ່ ${spaceId} ໄດ້`);
-        }
-      });
-
-      await Promise.all(spaceUpdatePromises);
-      console.log('Updated spaces for tenant');
-    }
-
-    // Generate initial payments for the new tenant (pass tenant directly to avoid state timing issues)
-    // if (tenantData.allSpace && tenantData.allSpace.length > 0) {
-    //   try {
-    //     // Determine payment frequency based on assigned spaces
-    //     const assignedSpaces = spaces.filter(s => tenantData.allSpace.includes(s.id));
-        
-    //     // Check if any space has a specific payment frequency
-    //     const hasYearlySpace = assignedSpaces.some(space => space.paymentFrequency === 'yearly');
-    //     const hasDailySpace = assignedSpaces.some(space => space.paymentFrequency === 'daily');
-        
-    //     // Determine payment frequency priority: yearly > monthly > daily
-    //     let paymentFrequency: 'daily' | 'monthly' | 'yearly' = 'monthly'; // default
-        
-    //     if (hasYearlySpace) {
-    //       paymentFrequency = 'yearly';
-    //     } else if (hasDailySpace) {
-    //       paymentFrequency = 'daily';
-    //     }
-
-    //     await generatePaymentsForTenant(
-    //   newTenant.tenantId, 
-    //   undefined, // Generate for all frequencies
-    //   new Date(), 
-    //   newTenantConverted
-    //     );
-        
-    //     console.log(`Generated ${paymentFrequency} payment for new tenant`);
-    //   } catch (error) {
-    //     console.error(
-    //       "Failed to generate initial payment for new tenant:",
-    //       error
-    //     );
-    //     // Don't throw here - tenant creation was successful
-    //   }
-    // }
-
-    console.log("Tenant and spaces updated successfully:", newTenant);
-    return newTenant;
-    
-  } catch (error) {
-    console.error("Error adding tenant:", error);
-    throw error;
-  }
-};
-
-const updateTenant = async (id: string, tenantUpdate: Partial<Tenant>) => {
-  try {
-    const existingTenant = tenants.find((t) => t.id === id);
-    if (!existingTenant) {
-      throw new Error("Tenant not found");
-    }
-
-    // Handle space assignment changes
-    if (tenantUpdate.allSpace !== undefined) {
-      const oldSpaces = existingTenant.allSpace || [];
-      const newSpaces = tenantUpdate.allSpace || [];
-
-      const spacesToRemove = oldSpaces.filter(
-        (spaceId) => !newSpaces.includes(spaceId)
-      );
-      const spacesToAdd = newSpaces.filter(
-        (spaceId) => !oldSpaces.includes(spaceId)
-      );
-
-      // Check if new spaces are available
-      if (spacesToAdd.length > 0) {
+  // Tenant operations. Step 1: Check for space conflicts, Step 2: Create the tenant record, Step 3: Update local memory & Step 4: Mark spaces as occupied
+  const addTenant = async (
+    tenantData: Omit<Tenant, "tenantId" | "createdAt" | "createdBy">
+  ) => {
+    try {
+      // Check if any assigned spaces are already occupied
+      if (tenantData.allSpace && tenantData.allSpace.length > 0) {
         const conflictingSpaces = spaces.filter(
           (space) =>
-            spacesToAdd.includes(space.id) &&
-            space.status === "ເຊົ່າແລ້ວ" &&
-            space.currentTenantId &&
-            space.currentTenantId !== existingTenant.tenantId
+            tenantData.allSpace.includes(space.id) &&
+            space.status === "rented" &&
+            space.currentTenantId
         );
 
         if (conflictingSpaces.length > 0) {
@@ -606,169 +1061,297 @@ const updateTenant = async (id: string, tenantUpdate: Partial<Tenant>) => {
         }
       }
 
-      // Remove tenant from old spaces - SYNC VERSION
-      for (const spaceId of spacesToRemove) {
-        const spaceUpdate = {
-          status: "ວ່າງ" as const,
-          currentTenantId: null, // Explicitly set to null
-          currentTenantName: null, // Clear tenant name
-          updatedAt: new Date(),
-        };
+      // Create the tenant record
+      const newTenant = await tenantsService.create({
+        ...tenantData,
+        createdBy: 1,
+      });
 
-        // Update database first
-        await spacesService.update(spaceId, spaceUpdate);
-        
-        // Update local state immediately
-        setSpaces((prev) =>
-          prev.map((space) =>
-            space.id === spaceId 
-              ? { 
-                  ...space, 
-                  ...spaceUpdate,
-                  currentTenantId: undefined, // Set to undefined for local state
-                  currentTenantName: undefined 
-                } 
-              : space
-          )
-        );
-        console.log(`✅ Removed tenant from space ${spaceId}`);
+      console.log("Created tenant:", newTenant);
+
+      // Convert and prepare for local state
+      const newTenantConverted = convertTimestamps(newTenant) as Tenant;
+
+      // Add to local state immediately
+      setTenants((prev) => [...prev, newTenantConverted]);
+
+      // Update all assigned spaces to mark them as occupied
+      if (tenantData.allSpace && tenantData.allSpace.length > 0) {
+        const spaceUpdatePromises = tenantData.allSpace.map(async (spaceId) => {
+          try {
+            const spaceUpdate = {
+              status: "rented" as const,
+              currentTenantId: newTenant.tenantId,
+              currentTenantName: newTenant.tenantName,
+
+              updatedAt: new Date(),
+            };
+
+            await spacesService.update(spaceId, spaceUpdate);
+
+            // Update local state
+            setSpaces((prev) =>
+              prev.map((space) =>
+                space.id === spaceId ? { ...space, ...spaceUpdate } : space
+              )
+            );
+          } catch (error) {
+            console.error(`Failed to update space ${spaceId}:`, error);
+            throw new Error(`ບໍ່ສາມາດອັບເດດພື້ນທີ່ ${spaceId} ໄດ້`);
+          }
+        });
+
+        await Promise.all(spaceUpdatePromises);
+        console.log("Updated spaces for tenant");
       }
 
-      // Add tenant to new spaces - SYNC VERSION
-      for (const spaceId of spacesToAdd) {
-        const spaceUpdate = {
-          status: "ເຊົ່າແລ້ວ" as const,
-          currentTenantId: existingTenant.tenantId,
-          currentTenantName:  existingTenant.tenantName,
-          updatedAt: new Date(),
-        };
-
-        // Update database first
-        await spacesService.update(spaceId, spaceUpdate);
-        
-        // Update local state immediately
-        setSpaces((prev) =>
-          prev.map((space) =>
-            space.id === spaceId ? { ...space, ...spaceUpdate } : space
-          )
-        );
-        console.log(`✅ Added tenant to space ${spaceId}`);
-      }
-
-      // Handle payment generation for newly assigned spaces
-      // if (spacesToAdd.length > 0) {
+      // Generate initial payments for the new tenant (pass tenant directly to avoid state timing issues)
+      // if (tenantData.allSpace && tenantData.allSpace.length > 0) {
       //   try {
-      //     const currentPeriod = `${new Date().getFullYear()}-${String(
-      //       new Date().getMonth() + 1
-      //     ).padStart(2, "0")}`;
-      //     const existingPayment = payments.find(
-      //       (p) =>
-      //         p.tenantId === existingTenant.tenantId &&
-      //         p.paymentPeriod === currentPeriod
+      //     // Determine payment frequency based on assigned spaces
+      //     const assignedSpaces = spaces.filter(s => tenantData.allSpace.includes(s.id));
+
+      //     // Check if any space has a specific payment frequency
+      //     const hasYearlySpace = assignedSpaces.some(space => space.paymentFrequency === 'yearly');
+      //     const hasDailySpace = assignedSpaces.some(space => space.paymentFrequency === 'daily');
+
+      //     // Determine payment frequency priority: yearly > monthly > daily
+      //     let paymentFrequency: 'daily' | 'monthly' | 'yearly' = 'monthly'; // default
+
+      //     if (hasYearlySpace) {
+      //       paymentFrequency = 'yearly';
+      //     } else if (hasDailySpace) {
+      //       paymentFrequency = 'daily';
+      //     }
+
+      //     await generatePaymentsForTenant(
+      //   newTenant.tenantId,
+      //   undefined, // Generate for all frequencies
+      //   new Date(),
+      //   newTenantConverted
       //     );
 
-      //     if (!existingPayment) {
-      //       await generatePaymentsForTenant(
-      //         existingTenant.tenantId,
-      //         "monthly"
-      //       );
-      //     }
+      //     console.log(`Generated ${paymentFrequency} payment for new tenant`);
       //   } catch (error) {
       //     console.error(
-      //       "Failed to generate payment for updated tenant spaces:",
+      //       "Failed to generate initial payment for new tenant:",
       //       error
       //     );
+      //     // Don't throw here - tenant creation was successful
       //   }
       // }
+
+      console.log("Tenant and spaces updated successfully:", newTenant);
+      return newTenant;
+    } catch (error) {
+      console.error("Error adding tenant:", error);
+      throw error;
     }
+  };
 
-    // Update tenant record in database
-    await tenantsService.update(id, tenantUpdate);
-    
-    // Update local tenant state
-    setTenants((prev) =>
-      prev.map((tenant) =>
-        tenant.id === id ? { ...tenant, ...tenantUpdate } : tenant
-      )
-    );
+  //  Step 1: Calculate space changes, Step 2: Check conflicts for new spaces Makes sure the new classrooms aren't already occupied by other students., Step 3: Remove tenant from old spaces, Step 4: Add tenant to new spaces Put the student's name on their new classroom doors. & Step 5: Update the tenant record Save the changes to the student's main record.
+  const updateTenant = async (id: string, tenantUpdate: Partial<Tenant>) => {
+    try {
+      const existingTenant = tenants.find((t) => t.id === id);
+      if (!existingTenant) {
+        throw new Error("Tenant not found");
+      }
 
-    console.log("✅ Tenant updated successfully:", id);
-  } catch (error) {
-    console.error("❌ Error updating tenant:", error);
-    throw error;
-  }
-};
+      // Handle space assignment changes
+      if (tenantUpdate.allSpace !== undefined) {
+        const oldSpaces = existingTenant.allSpace || [];
+        const newSpaces = tenantUpdate.allSpace || [];
 
-const deleteTenant = async (tenantId: string) => {
-  try {
-    console.log("🔍 Looking for tenant with ID:", tenantId);
+        const spacesToRemove = oldSpaces.filter(
+          (spaceId) => !newSpaces.includes(spaceId)
+        );
+        const spacesToAdd = newSpaces.filter(
+          (spaceId) => !oldSpaces.includes(spaceId)
+        );
 
-    // Find the tenant by tenantId to get the Firebase document ID
-    const tenant = tenants.find((t) => t.tenantId === tenantId);
-    if (!tenant) {
-      console.error("❌ Tenant not found. Search ID:", tenantId);
-      throw new Error("Tenant not found");
-    }
+        // Check if new spaces are available
+        if (spacesToAdd.length > 0) {
+          const conflictingSpaces = spaces.filter(
+            (space) =>
+              spacesToAdd.includes(space.id) &&
+              space.status === "rented" &&
+              space.currentTenantId &&
+              space.currentTenantId !== existingTenant.tenantId
+          );
 
-    console.log("✅ Found tenant:", tenant);
+          if (conflictingSpaces.length > 0) {
+            const conflictCodes = conflictingSpaces
+              .map((s) => s.spaceCode)
+              .join(", ");
+            throw new Error(
+              `ພື້ນທີ່ ${conflictCodes} ຖືກເຊົ່າແລ້ວໂດຍຜູ້ເຊົ່າອື່ນ`
+            );
+          }
+        }
 
-    // Free up all assigned spaces - SYNC VERSION
-    if (tenant.allSpace && tenant.allSpace.length > 0) {
-      for (const spaceId of tenant.allSpace) {
-        const spaceUpdate = {
-          status: "ວ່າງ" as const,
-          currentTenantId: null, // Explicitly set to null for database
-          currentTenantName: null, // Clear tenant name
-          updatedAt: new Date(),
-        };
+        // Remove tenant from old spaces - SYNC VERSION
+        for (const spaceId of spacesToRemove) {
+          const spaceUpdate = {
+            status: "vacant" as const,
+            currentTenantId: null, // Explicitly set to null
+            currentTenantName: null, // Clear tenant name
+            updatedAt: new Date(),
+          };
 
-        try {
           // Update database first
           await spacesService.update(spaceId, spaceUpdate);
-          
+
           // Update local state immediately
           setSpaces((prev) =>
             prev.map((space) =>
-              space.id === spaceId 
-                ? { 
-                    ...space, 
-                    status: "ວ່າງ" as const,
-                    currentTenantId: undefined, // undefined for local state
+              space.id === spaceId
+                ? {
+                    ...space,
+                    ...spaceUpdate,
+                    currentTenantId: undefined, // Set to undefined for local state
                     currentTenantName: undefined,
-                    updatedAt: new Date()
-                  } 
+                  }
                 : space
             )
           );
-          console.log(`✅ Freed space ${spaceId} from tenant ${tenantId}`);
-        } catch (spaceError) {
-          console.error(`❌ Failed to free space ${spaceId}:`, spaceError);
-          // Continue with other spaces even if one fails
+          console.log(`✅ Removed tenant from space ${spaceId}`);
+        }
+
+        // Add tenant to new spaces - SYNC VERSION
+        for (const spaceId of spacesToAdd) {
+          const spaceUpdate = {
+            status: "rented" as const,
+            currentTenantId: existingTenant.tenantId,
+            currentTenantName: existingTenant.tenantName,
+            updatedAt: new Date(),
+          };
+
+          // Update database first
+          await spacesService.update(spaceId, spaceUpdate);
+
+          // Update local state immediately
+          setSpaces((prev) =>
+            prev.map((space) =>
+              space.id === spaceId ? { ...space, ...spaceUpdate } : space
+            )
+          );
+          console.log(`✅ Added tenant to space ${spaceId}`);
+        }
+
+        // Handle payment generation for newly assigned spaces
+        // if (spacesToAdd.length > 0) {
+        //   try {
+        //     const currentPeriod = `${new Date().getFullYear()}-${String(
+        //       new Date().getMonth() + 1
+        //     ).padStart(2, "0")}`;
+        //     const existingPayment = payments.find(
+        //       (p) =>
+        //         p.tenantId === existingTenant.tenantId &&
+        //         p.paymentPeriod === currentPeriod
+        //     );
+
+        //     if (!existingPayment) {
+        //       await generatePaymentsForTenant(
+        //         existingTenant.tenantId,
+        //         "monthly"
+        //       );
+        //     }
+        //   } catch (error) {
+        //     console.error(
+        //       "Failed to generate payment for updated tenant spaces:",
+        //       error
+        //     );
+        //   }
+        // }
+      }
+
+      // Update tenant record in database
+      await tenantsService.update(id, tenantUpdate);
+
+      // Update local tenant state
+      setTenants((prev) =>
+        prev.map((tenant) =>
+          tenant.id === id ? { ...tenant, ...tenantUpdate } : tenant
+        )
+      );
+
+      console.log("✅ Tenant updated successfully:", id);
+    } catch (error) {
+      console.error("❌ Error updating tenant:", error);
+      throw error;
+    }
+  };
+
+  // Step 1: Find the tenant, Step 2: Free up all their spaces & Step 3: Delete the tenant record
+  const deleteTenant = async (tenantId: string) => {
+    try {
+      console.log("🔍 Looking for tenant with ID:", tenantId);
+
+      // Find the tenant by tenantId to get the Firebase document ID
+      const tenant = tenants.find((t) => t.tenantId === tenantId);
+      if (!tenant) {
+        console.error("❌ Tenant not found. Search ID:", tenantId);
+        throw new Error("Tenant not found");
+      }
+
+      console.log("✅ Found tenant:", tenant);
+
+      // Free up all assigned spaces - SYNC VERSION
+      if (tenant.allSpace && tenant.allSpace.length > 0) {
+        for (const spaceId of tenant.allSpace) {
+          const spaceUpdate = {
+            status: "vacant" as const,
+            currentTenantId: null, // Explicitly set to null for database
+            currentTenantName: null, // Clear tenant name
+            updatedAt: new Date(),
+          };
+
+          try {
+            // Update database first
+            await spacesService.update(spaceId, spaceUpdate);
+
+            // Update local state immediately
+            setSpaces((prev) =>
+              prev.map((space) =>
+                space.id === spaceId
+                  ? {
+                      ...space,
+                      status: "vacant" as const,
+                      currentTenantId: undefined, // undefined for local state
+                      currentTenantName: undefined,
+                      updatedAt: new Date(),
+                    }
+                  : space
+              )
+            );
+            console.log(`✅ Freed space ${spaceId} from tenant ${tenantId}`);
+          } catch (spaceError) {
+            console.error(`❌ Failed to free space ${spaceId}:`, spaceError);
+            // Continue with other spaces even if one fails
+          }
         }
       }
+
+      // Use the Firebase document ID for deletion
+      const firebaseDocId = tenant.id;
+      if (!firebaseDocId) {
+        throw new Error("Firebase document ID missing");
+      }
+
+      // Delete tenant record using Firebase document ID
+      await tenantsService.delete(firebaseDocId);
+
+      // Update local state using tenantId for consistency
+      setTenants((prev) => prev.filter((t) => t.tenantId !== tenantId));
+
+      console.log("✅ Tenant deleted and all spaces freed:", tenantId);
+    } catch (error) {
+      console.error("❌ Error deleting tenant:", error);
+      throw error;
     }
+  };
 
-    // Use the Firebase document ID for deletion
-    const firebaseDocId = tenant.id;
-    if (!firebaseDocId) {
-      throw new Error("Firebase document ID missing");
-    }
-
-    // Delete tenant record using Firebase document ID
-    await tenantsService.delete(firebaseDocId);
-
-    // Update local state using tenantId for consistency
-    setTenants((prev) => prev.filter((t) => t.tenantId !== tenantId));
-
-    console.log("✅ Tenant deleted and all spaces freed:", tenantId);
-    
-  } catch (error) {
-    console.error("❌ Error deleting tenant:", error);
-    throw error;
-  }
-};
-
-  // Payment operations
+  // Payment operations nice nice, Step 1: Clean up the data(Remove the old-style field names that Firebase doesn't need.), Step 2: Create in database, Step 3: Add compatibility fields back & Step 4: Update local memory
   const addPayment = async (
     paymentData: Omit<Payment, "paymentId" | "createdAt" | "updatedAt">
   ) => {
@@ -799,60 +1382,320 @@ const deleteTenant = async (tenantId: string) => {
     }
   };
 
-  const updatePayment = async (id: string, paymentUpdate: Partial<Payment>) => {
-    try {
-      // Strip legacy fields before sending to Firebase
-      const {
-        roomId,
-        amount,
-        status,
-        paidDate,
-        paymentType,
-        ...firebaseUpdate
-      } = paymentUpdate;
+  // This function is like a bank teller who needs to update a bill, but has special handling when someone actually pays it. Step 1: Find the payment, Step 2: Check if marking as paid & Step 3A: If paid - move to different collection || Step 3B: If not paid - regular update Strip legacy fields, map field names, update database, update local state.
+// Your existing updatePayment method with MINIMAL changes for image support:
 
-      // Map English status back to Lao if provided
-      if (status) {
-        const statusMapping: Record<
-          string,
-          "ລໍຖ້າ" | "ຈ່າຍແລ້ວ" | "ເກີນກຳນົດ" | "ຈ່າຍບາງສ່ວນ"
-        > = {
-          pending: "ລໍຖ້າ",
-          paid: "ຈ່າຍແລ້ວ",
-          overdue: "ເກີນກຳນົດ",
-          partial: "ຈ່າຍບາງສ່ວນ",
-        };
-        firebaseUpdate.paymentStatus = statusMapping[status];
+const updatePayment = async (
+  id: string, 
+  paymentUpdate: Partial<Payment>,
+  providedPayment?: Payment,  // Optional payment object
+  paymentImage?: File  // ADD THIS LINE ONLY
+) => {
+  try {
+    // Find the current payment first
+    let currentPayment = providedPayment || 
+                        payments.find(p => (p.paymentId || p.id) === id);
+    if (!currentPayment) {
+      throw new Error("Payment not found");
+    }
+
+    // ADD THIS BLOCK FOR IMAGE HANDLING:
+    // let imageData = {};
+    // if (paymentImage) {
+    //   console.log('Uploading payment image for update...');
+    //   const { downloadURL, path } = await StorageService.uploadPaymentImage(
+    //     paymentImage, 
+    //     id
+    //   );
+    //   imageData = {
+    //     paymentImageUrl: downloadURL,
+    //     paymentImagePath: path
+    //   };
+      
+    //   // Delete old image if it exists
+    //   if (currentPayment.paymentImagePath) {
+    //     await StorageService.deletePaymentImage(currentPayment.paymentImagePath);
+    //   }
+    // }
+    // END OF NEW IMAGE BLOCK
+
+    // Check if this update is marking the payment as paid
+    const isMarkingAsPaid = (paymentUpdate.paymentStatus === 'paid' || paymentUpdate.status === 'paid') && 
+                           currentPayment.paymentStatus !== 'paid' && 
+                           currentPayment.status !== 'paid';
+
+    if (isMarkingAsPaid) {
+      // Store payment info for single space generation BEFORE moving payment
+      const tenantId = currentPayment.tenantId;
+      const paymentFrequency = currentPayment.paymentFrequency;
+      const spaceId = currentPayment.spaceId; // Get the specific space ID
+      
+      console.log(`Payment marked as paid for tenant ${tenantId}, frequency: ${paymentFrequency}, space: ${spaceId}`);
+
+      // CHANGE THIS LINE TO PASS IMAGE DATA:
+      await movePaymentToPaidCollection(currentPayment, paymentUpdate, paymentImage);
+
+      // YOUR EXISTING NEXT PAYMENT GENERATION CODE STAYS THE SAME:
+      if (tenantId && paymentFrequency && spaceId) {
+        try {
+          console.log(`Generating next ${paymentFrequency} payment for tenant ${tenantId}, space ${spaceId}...`);
+          
+          // Find the specific space
+          const space = spaces.find(s => s.id === spaceId);
+          if (!space) {
+            console.warn(`Space ${spaceId} not found, skipping payment generation`);
+            return;
+          }
+
+          // Calculate next due date based on the current payment's due date
+          const currentDueDate = new Date(currentPayment.originalDueDate || currentPayment.dueDate);
+          let nextDueDate = new Date(currentDueDate);
+          
+          // Add the appropriate period based on frequency
+          switch (paymentFrequency) {
+            case 'daily':
+              nextDueDate.setDate(nextDueDate.getDate() + 1);
+              break;
+            case 'monthly':
+              nextDueDate.setDate(nextDueDate.getDate() + 30);
+              break;
+            case 'yearly':
+              nextDueDate.setDate(nextDueDate.getDate() + 365);
+              break;
+            default:
+              // Default to monthly if frequency is unclear
+              nextDueDate.setDate(nextDueDate.getDate() + 30);
+              break;
+          }
+
+          // Calculate the period for the new payment
+          let calculatedPeriod = "";
+          switch (paymentFrequency) {
+            case "daily":
+              calculatedPeriod = `${nextDueDate.getFullYear()}-${String(
+                nextDueDate.getMonth() + 1
+              ).padStart(2, "0")}-${String(nextDueDate.getDate()).padStart(2, "0")}`;
+              break;
+            case "monthly":
+              calculatedPeriod = `${nextDueDate.getFullYear()}-${String(
+                nextDueDate.getMonth() + 1
+              ).padStart(2, "0")}`;
+              break;
+            case "yearly":
+              calculatedPeriod = nextDueDate.getFullYear().toString();
+              break;
+          }
+
+          // Check if payment already exists for this specific space and period
+          const existingPayment = [...payments, ...paidPayments].some(p => 
+            p.spaceId === spaceId && 
+            p.tenantId === tenantId && 
+            p.paymentPeriod === calculatedPeriod && 
+            p.paymentFrequency === paymentFrequency
+          );
+
+          if (existingPayment) {
+            console.log(`Payment already exists for space ${space.spaceCode}, period ${calculatedPeriod}`);
+            return;
+          }
+
+          // Calculate amount based on frequency
+          let amountDue = 0;
+          switch (paymentFrequency) {
+            case "yearly":
+              amountDue = space.baseRentMonthly * 12;
+              break;
+            case "daily":
+              amountDue = Math.round(space.baseRentMonthly / 30);
+              break;
+            case "monthly":
+            default:
+              amountDue = space.baseRentMonthly;
+              break;
+          }
+
+          // Create the new payment for this specific space
+          const paymentData = {
+            spaceId: space.id,
+            spaceCode: space.spaceCode,
+            tenantId: tenantId,
+            paymentPeriod: calculatedPeriod,
+            dueDate: nextDueDate,
+            originalDueDate: nextDueDate,
+            amountDue,
+            originalAmount: amountDue,
+            lateFee: 0,
+            lateFeeRate: null,
+            lateFeeApplied: false,
+            daysOverdue: 0,
+            paymentStatus: "pending" as const,
+            paymentFrequency: paymentFrequency as "daily" | "monthly" | "yearly",
+            notes: `${
+              paymentFrequency.charAt(0).toUpperCase() + paymentFrequency.slice(1)
+            } payment for space ${space.spaceCode} (${
+              space.spaceType || "Unknown type"
+            }) - Period: ${calculatedPeriod}`,
+
+            // Legacy fields for compatibility
+            id: "",
+            roomId: space.id,
+            amount: amountDue,
+            status: "pending" as const,
+            paymentType: paymentFrequency as "daily" | "monthly" | "yearly",
+          };
+
+          // Create the payment
+          await addPayment(paymentData);
+          
+          // Update space payment status
+          await updateSpace(space.id, {
+            paymentStatus: {
+              currentStatus: "pending",
+              currentPeriodPaid: false,
+              nextDueDate: nextDueDate,
+              lateFee: 0,
+              lateFeeApplied: false,
+              daysOverdue: 0,
+              lastUpdated: new Date(),
+            },
+          });
+
+          console.log(`✅ Successfully generated next ${paymentFrequency} payment for space ${space.spaceCode} - Due: ${nextDueDate.toLocaleDateString()}`);
+
+        } catch (generationError) {
+          console.error(`Failed to generate next payment for space ${spaceId}:`, generationError);
+          console.warn("Payment processing completed, but next payment generation failed for this space.");
+        }
       }
 
-      // Map other legacy fields
-      if (amount !== undefined) firebaseUpdate.amountDue = amount;
-      if (paidDate !== undefined) firebaseUpdate.paymentDate = paidDate;
-
-      await paymentsService.update(id, firebaseUpdate);
-
-      // Update local state with enhanced data
-      setPayments((prev) =>
-        prev.map((payment) => {
-          if (payment.paymentId === id || payment.id === id) {
-            const updatedPayment = { ...payment, ...paymentUpdate };
-            return enhancePaymentWithLegacyFields(
-              updatedPayment,
-              tenants,
-              spaces
-            );
-          }
-          return payment;
-        })
-      );
-
-      console.log("Payment updated:", id);
-    } catch (error) {
-      console.error("Error updating payment:", error);
-      throw error;
+      return; // Exit early since payment is moved, not updated
     }
-  };
 
+    // Continue with your existing logic for all other updates
+    // Strip legacy fields before sending to Firebase
+    const {
+      roomId,
+      amount,
+      status,
+      paidDate,
+      paymentType,
+      ...firebaseUpdate
+    } = { ...paymentUpdate, }; // ADD ...imageData HERE
+
+    // Map English status back to Lao if provided
+    if (status) {
+      const statusMapping: Record<string, "pending" | "paid" | "overdue" | "partial"> = {
+        "pending": "pending",
+        "paid": "paid",
+        "overdue": "overdue",
+        "partial": "partial"
+      };
+      firebaseUpdate.paymentStatus = statusMapping[status];
+    }
+
+    // Map other legacy fields
+    if (amount !== undefined) firebaseUpdate.amountDue = amount;
+    if (paidDate !== undefined) firebaseUpdate.paymentDate = paidDate;
+
+    await paymentsService.update(id, firebaseUpdate);
+
+    // Update local state with enhanced data
+    setPayments((prev) =>
+      prev.map((payment) => {
+        if (payment.paymentId === id || payment.id === id) {
+          const updatedPayment = { ...payment, ...paymentUpdate, }; // ADD ...imageData HERE
+          return enhancePaymentWithLegacyFields(
+            updatedPayment,
+            tenants,
+            spaces
+          );
+        }
+        return payment;
+      })
+    );
+
+    console.log("Payment updated:", id);
+  } catch (error) {
+    console.error("Error updating payment:", error);
+    throw error;
+  }
+};
+// Add new bulk payment handler method
+const handleBulkPayments = async (data: {
+  payments: Payment[];
+  paymentMethod: 'cash' | 'transfer';
+  notes?: string;
+  paymentImage?: File;
+}, onProgress?: (progress: number) => void) => {
+  try {
+    console.log('Processing bulk payments...', data.payments.length);
+    
+    let sharedImageData = {};
+    
+    // Upload shared image if provided with progress callback
+    if (data.paymentImage) {
+      const bulkId = `bulk-${Date.now()}`;
+      console.log('Uploading bulk payment image...');
+      
+      // Pass progress callback to storage service
+      const { downloadURL, path } = await StorageService.uploadBulkPaymentImage(
+        data.paymentImage, 
+        bulkId,
+        onProgress // Pass the progress callback
+      );
+      
+      sharedImageData = {
+        paymentImageUrl: downloadURL,
+        paymentImagePath: path
+      };
+      console.log('Bulk payment image uploaded successfully');
+    }
+
+    // Process each payment
+    const processedPayments = [];
+    const totalPayments = data.payments.length;
+    
+    for (let i = 0; i < data.payments.length; i++) {
+      const payment = data.payments[i];
+      try {
+        const paymentUpdate = {
+          paymentStatus: 'paid' as const,
+          paymentMethod: data.paymentMethod,
+          paymentDate: new Date(),
+          notes: data.notes || '',
+          processedBy: 'current-user',
+          receiptNumber: generateReceiptNumber(),
+          amountPaid: (payment.amount || payment.amountDue) + (payment.lateFee || 0),
+          ...sharedImageData // Add shared image data to each payment
+        };
+
+        // Update the payment (this will move it to paid collection)
+        await updatePayment(payment.paymentId || payment.id, paymentUpdate, payment);
+        processedPayments.push(payment);
+        
+        // Update progress for payment processing (if no image, use this for progress)
+        if (!data.paymentImage && onProgress) {
+          const progress = Math.round(((i + 1) / totalPayments) * 100);
+          onProgress(progress);
+        }
+        
+        console.log(`Processed payment ${payment.paymentId || payment.id}`);
+      } catch (error) {
+        console.error(`Failed to process payment ${payment.paymentId || payment.id}:`, error);
+        // Continue with other payments even if one fails
+      }
+    }
+
+    console.log(`Bulk payment processing completed: ${processedPayments.length}/${data.payments.length} payments processed`);
+    return processedPayments;
+  } catch (error) {
+    console.error('Error in bulk payment processing:', error);
+    throw error;
+  }
+};
+
+
+// Delete payments
   const deletePayment = async (id: string) => {
     try {
       await paymentsService.delete(id);
@@ -1104,30 +1947,45 @@ const deleteTenant = async (tenantId: string) => {
     return `${prefix}${timestamp}${random}`;
   };
 
-  const updateSettings = (newSettings: Partial<SystemSettings>) => {
-    setSettings((prev) => ({ ...prev, ...newSettings }));
-  };
+ const updateSettings = async (newSettings: Partial<SystemSettings>) => {
+  try {
+    const updatedSettings = { ...settings, ...newSettings };
+    
+    // Update local state first
+    setSettings(updatedSettings);
+    
+    // Save to Firestore (ADD THIS PART)
+    const { doc, setDoc, getFirestore } = await import('firebase/firestore');
+    const db = getFirestore();
+    await setDoc(doc(db, 'systemSettings', 'main'), updatedSettings);
+    
+    console.log('Settings saved to database successfully');
+  } catch (error) {
+    console.error('Error saving settings:', error);
+    throw error;
+  }
+};
 
   const getDashboardStats = (): DashboardStats => {
     try {
       // Basic space statistics with null safety
       const totalSpaces = spaces?.length || 0;
       const occupiedSpaces =
-        spaces?.filter((s) => s.status === "ເຊົ່າແລ້ວ").length || 0;
+        spaces?.filter((s) => s.status === "rented").length || 0;
       const vacantSpaces =
-        spaces?.filter((s) => s.status === "ວ່າງ").length || 0;
+        spaces?.filter((s) => s.status === "vacant").length || 0;
       const maintenanceSpaces =
-        spaces?.filter((s) => s.status === "ຊ່ອມແຊມ").length || 0;
+        spaces?.filter((s) => s.status === "maintainance").length || 0;
 
       // Space type breakdown
       const tableSpaces =
-        spaces?.filter((s) => s.spaceType === "ໂຕະ").length || 0;
+        spaces?.filter((s) => s.spaceType === "table").length || 0;
       const roomSpaces =
-        spaces?.filter((s) => s.spaceType === "ຫ້ອງເຊົ່າ").length || 0;
+        spaces?.filter((s) => s.spaceType === "room").length || 0;
       const signageSpaces =
-        spaces?.filter((s) => s.spaceType === "ປ້າຍ").length || 0;
+        spaces?.filter((s) => s.spaceType === "signage").length || 0;
       const boothSpaces =
-        spaces?.filter((s) => s.spaceType === "ບູດ").length || 0;
+        spaces?.filter((s) => s.spaceType === "booth").length || 0;
 
       // Tenant statistics
       const activeTenants = tenants?.length || 0;
@@ -1148,7 +2006,7 @@ const deleteTenant = async (tenantId: string) => {
       // Payment filtering with null safety
       const safePayments = payments || [];
       const paidPayments = safePayments.filter(
-        (p) => p.paymentStatus === "ຈ່າຍແລ້ວ" && p.paymentDate
+        (p) => p.paymentStatus === "paid" && p.paymentDate
       );
 
       // Revenue calculations
@@ -1176,10 +2034,10 @@ const deleteTenant = async (tenantId: string) => {
 
       // Payment status counts
       const pendingPayments = safePayments.filter(
-        (p) => p.paymentStatus === "ລໍຖ້າ"
+        (p) => p.paymentStatus === "pending"
       ).length;
       const overduePayments = safePayments.filter(
-        (p) => p.paymentStatus === "ເກີນກຳນົດ"
+        (p) => p.paymentStatus === "overdue"
       ).length;
 
       // Collection statistics
@@ -1268,6 +2126,7 @@ const deleteTenant = async (tenantId: string) => {
     }
   };
 
+  // the "magic backpack" being filled with all the supplies and tools that components can access.
   return (
     <DataContext.Provider
       value={{
@@ -1275,6 +2134,10 @@ const deleteTenant = async (tenantId: string) => {
         spaces,
         tenants,
         payments,
+         paidPayments, // ADD THIS
+         // Add the new handler
+      
+    
         bills,
         users,
         notifications,
@@ -1295,6 +2158,12 @@ const deleteTenant = async (tenantId: string) => {
         addPayment,
         updatePayment,
         deletePayment,
+        handleBulkPayments,
+        
+
+        // ADD:
+        processLateFees,
+          loadPaidPayments, // ADD THIS
 
         // Bill operations
         addBill,
@@ -1315,6 +2184,7 @@ const deleteTenant = async (tenantId: string) => {
         // Payment generation functions
         generatePaymentsForTenant,
         generatePaymentsForAllTenants,
+        cleanupDuplicatePayments,
 
         // Utility functions
         getDashboardStats,

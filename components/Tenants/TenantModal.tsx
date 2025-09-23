@@ -22,39 +22,30 @@ interface TenantModalProps {
 }
 
 // Add this after the interface definitions, before the component
-const generateTenantId = (
-  tenantName: string,
-  existingTenants: Tenant[]
-): string => {
-  // Clean the name: remove special characters, spaces, and convert to lowercase
-  const cleanName = tenantName
-    .toLowerCase()
-    .replace(/[^a-z0-9]/g, "")
-    .substring(0, 8); // Take up to 8 characters for the name part
-
-  // Find existing tenants with the same name prefix
-  const existingIds = existingTenants
-    .map((t) => t.tenantId)
-    .filter((id) => id.startsWith(cleanName))
-    .map((id) => {
-      const numberPart = id.replace(cleanName, "");
+const generateTenantId = (existingTenants: Tenant[]): string => {
+  // Extract numbers from existing tenant IDs that start with 'TN'
+  const existingNumbers = existingTenants
+    .map((t: Tenant) => t.tenantId)
+    .filter((id: string) => id.startsWith('TN'))
+    .map((id: string) => {
+      const numberPart = id.replace('TN', '');
       return parseInt(numberPart) || 0;
     })
-    .sort((a, b) => a - b);
+    .sort((a: number, b: number) => a - b);
 
-  // Find the next available number
+  // Find the next available number (fills gaps)
   let nextNumber = 1;
-  for (const num of existingIds) {
+  for (const num of existingNumbers) {
     if (num === nextNumber) {
       nextNumber++;
     } else {
-      break;
+      break; // Found a gap, use this number
     }
   }
 
-  // Format with leading zeros (001, 002, etc.)
-  const paddedNumber = nextNumber.toString().padStart(3, "0");
-  return `${cleanName}${paddedNumber}`;
+  // Return formatted ID with 4-digit padding
+  return `TN${nextNumber.toString().padStart(4, '0')}`;
+  // Results: TN0001, TN0002, TN0003, etc.
 };
 
 const TenantModal: React.FC<TenantModalProps> = ({
@@ -104,18 +95,17 @@ const TenantModal: React.FC<TenantModalProps> = ({
         : [...(prev.allSpace || []), spaceId],
     }));
   };
-
-  const calculateTotalRent = () => {
-    return (formData.allSpace || []).reduce((total, spaceId) => {
-      const space = spaces.find((s) => s.id === spaceId); // Change from s.spaceId to s.id
-      return total + (space ? space.baseRentMonthly : 0);
-    }, 0);
-  };
+const calculateTotalRent = () => {
+  return (formData.allSpace || []).reduce((total, spaceId) => {
+    const space = spaces.find((s) => s.id === spaceId);
+    return total + (space?.originalRentAmount || 0);
+  }, 0);
+};
 
   const getFilteredSpaces = () => {
   const availableSpaces = spaces.filter((space) => {
     // Show vacant spaces
-    if (space.status === "ວ່າງ") return true;
+    if (space.status === "vacant") return true;
 
     // Show spaces currently assigned to this tenant (when editing)
     if (editingTenant && (formData.allSpace || []).includes(space.id))
@@ -156,7 +146,7 @@ const validateSpaceSelection = (): string[] => {
 
     // Check if space is occupied by another tenant (only for new assignments)
     if (
-      space.status === "ເຊົ່າແລ້ວ" &&
+      space.status === "rented" &&
       space.currentTenantId &&
       space.currentTenantId !== editingTenant?.tenantId
     ) {
@@ -164,7 +154,7 @@ const validateSpaceSelection = (): string[] => {
     }
 
     // Check if space is under maintenance
-    if (space.status === "ຊ່ອມແຊມ") {
+    if (space.status === "maintainance") {
       unavailableSpaces.push(space.spaceCode);
     }
   });
@@ -196,11 +186,11 @@ const validateSpaceSelection = (): string[] => {
   };
 
   const renderSpaceCheckbox = (space: Space) => {
-    const isUnavailable = space.status === 'ເຊົ່າແລ້ວ' && 
+    const isUnavailable = space.status === 'rented' && 
                        space.currentTenantId && 
                        space.currentTenantId !== editingTenant?.tenantId;
   
-  const isInMaintenance = space.status === 'ຊ່ອມແຊມ';
+  const isInMaintenance = space.status === 'maintainance';
  return (
     <label 
       key={space.id} // Change from space.spaceId to space.id
@@ -238,8 +228,7 @@ const validateSpaceSelection = (): string[] => {
             )}
           </div>
           <div className="text-xs text-gray-500">
-            {space.spaceType} • Zone {space.zone} • ₭
-            {space.baseRentMonthly.toLocaleString()}/ເດືອນ
+{space.spaceType} • Zone {space.zone} • ₭{space.originalRentAmount?.toLocaleString()}/{space.paymentFrequency === 'yearly' ? 'ປີ' : space.paymentFrequency === 'monthly' ? 'ເດືອນ' : space.paymentFrequency}
           </div>
         </div>
       </label>
@@ -348,16 +337,16 @@ const validateSpaceSelection = (): string[] => {
                 <input
                   type="text"
                   value={formData.tenantName}
-                  onChange={(e) => {
-                    const name = e.target.value;
-                    handleInputChange("tenantName", name);
+                 onChange={(e) => {
+  const name = e.target.value;
+  handleInputChange("tenantName", name);
 
-                    // Auto-generate tenantId for new tenants
-                    if (!editingTenant && name.trim()) {
-                      const newId = generateTenantId(name, tenants); // Pass existing tenants
-                      handleInputChange("tenantId", newId);
-                    }
-                  }}
+  // Auto-generate tenantId for new tenants
+  if (!editingTenant && name.trim()) {
+    const newId = generateTenantId(tenants); // Remove 'name' parameter
+    handleInputChange("tenantId", newId);
+  }
+}}
                   className={`w-full px-4 py-3 border rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent ${
                     errors.tenantName ? "border-red-500" : "border-gray-300"
                   }`}
@@ -425,7 +414,8 @@ const validateSpaceSelection = (): string[] => {
                       {space.spaceCode} <span className="text-xs text-blue-600">(ປັດຈຸບັນ)</span>
                     </div>
                     <div className="text-xs text-blue-700">
-                      {space.spaceType} • Zone {space.zone} • ₭{space.baseRentMonthly.toLocaleString()}/ເດືອນ
+{space.spaceType} • Zone {space.zone} • ₭{space.originalRentAmount?.toLocaleString()}/{space.paymentFrequency === 'yearly' ? 'ປີ' : space.paymentFrequency === 'monthly' ? 'ເດືອນ' : space.paymentFrequency === 'daily' ? 'ມື້' : space.paymentFrequency}
+                      
                     </div>
                   </div>
                 </label>
@@ -450,10 +440,10 @@ const validateSpaceSelection = (): string[] => {
           <div className="flex flex-wrap gap-2">
             {[
               { key: "all", label: "ທັງໝົດ" },
-              { key: "ໂຕະ", label: "ໂຕະ" },
-              { key: "ຫ້ອງເຊົ່າ", label: "ຫ້ອງເຊົ່າ" },
-              { key: "ບູດ", label: "ບູດ" },
-              { key: "ປ້າຍ", label: "ປ້າຍ" },
+              { key: "table", label: "ໂຕະ" },
+              { key: "room", label: "ຫ້ອງເຊົ່າ" },
+              { key: "booth", label: "ບູດ" },
+              { key: "signage", label: "ປ້າຍ" },
             ].map((tab) => (
               <button
                 key={tab.key}
@@ -476,7 +466,7 @@ const validateSpaceSelection = (): string[] => {
             {spaces
               .filter((space) => {
                 // Only show truly vacant spaces
-                const isVacant = space.status === "ວ່າງ";
+                const isVacant = space.status === "vacant";
                 const matchesFilter = spaceTypeFilter === "all" || space.spaceType === spaceTypeFilter;
                 const notCurrentlySelected = !(formData.allSpace || []).includes(space.id);
                 
@@ -495,7 +485,7 @@ const validateSpaceSelection = (): string[] => {
                       {space.spaceCode} <span className="text-xs text-green-600">(ວ່າງ)</span>
                     </div>
                     <div className="text-xs text-green-700">
-                      {space.spaceType} • Zone {space.zone} • ₭{space.baseRentMonthly.toLocaleString()}/ເດືອນ
+                      {space.spaceType} • Zone {space.zone} • ₭{space.originalRentAmount?.toLocaleString()}/{space.paymentFrequency === 'yearly' ? 'ປີ' : space.paymentFrequency === 'monthly' ? 'ເດືອນ' : space.paymentFrequency === 'daily' ? 'ມື້' : space.paymentFrequency}
                     </div>
                   </div>
                 </label>
@@ -504,7 +494,7 @@ const validateSpaceSelection = (): string[] => {
           </div>
           
           {spaces.filter((space) => {
-            const isVacant = space.status === "ວ່າງ";
+            const isVacant = space.status === "vacant";
             const matchesFilter = spaceTypeFilter === "all" || space.spaceType === spaceTypeFilter;
             const notCurrentlySelected = !(formData.allSpace || []).includes(space.id);
             return isVacant && matchesFilter && notCurrentlySelected;
@@ -524,27 +514,27 @@ const validateSpaceSelection = (): string[] => {
             {
               key: "all",
               label: "ທັງໝົດ",
-              count: spaces.filter((s) => s.status === "ວ່າງ").length,
+              count: spaces.filter((s) => s.status === "vacant").length,
             },
             {
-              key: "ໂຕະ",
+              key: "table",
               label: "ໂຕະ",
-              count: spaces.filter((s) => s.status === "ວ່າງ" && s.spaceType === "ໂຕະ").length,
+              count: spaces.filter((s) => s.status === "vacant" && s.spaceType === "table").length,
             },
             {
-              key: "ຫ້ອງເຊົ່າ",
+              key: "room",
               label: "ຫ້ອງເຊົ່າ",
-              count: spaces.filter((s) => s.status === "ວ່າງ" && s.spaceType === "ຫ້ອງເຊົ່າ").length,
+              count: spaces.filter((s) => s.status === "vacant" && s.spaceType === "room").length,
             },
             {
-              key: "ບູດ",
+              key: "booth",
               label: "ບູດ",
-              count: spaces.filter((s) => s.status === "ວ່າງ" && s.spaceType === "ບູດ").length,
+              count: spaces.filter((s) => s.status === "vacant" && s.spaceType === "booth").length,
             },
             {
-              key: "ປ້າຍ",
+              key: "signage",
               label: "ປ້າຍ",
-              count: spaces.filter((s) => s.status === "ວ່າງ" && s.spaceType === "ປ້າຍ").length,
+              count: spaces.filter((s) => s.status === "vacant" && s.spaceType === "signage").length,
             },
           ].map((tab) => (
             <button

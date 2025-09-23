@@ -2,7 +2,7 @@
 
 export interface SpaceConfig {
   code: string;
-  type: 'ໂຕະ' | 'ຫ້ອງເຊົ່າ' | 'ບູດ' | 'ປ້າຍ';
+  type: 'table' | 'room' | 'booth' | 'signage';
   zone?: 'G' | 'A' | 'B' | 'C' | 'D';
   isAvailable: boolean;
 }
@@ -15,7 +15,7 @@ const generateSpaceCodes = (): SpaceConfig[] => {
   for (let i = 1; i <= 130; i++) {
     spaces.push({
       code: `T${i.toString().padStart(3, '0')}`,
-      type: 'ໂຕະ',
+      type: 'table',
       isAvailable: true
     });
   }
@@ -33,7 +33,7 @@ const generateSpaceCodes = (): SpaceConfig[] => {
     for (let i = 1; i <= count; i++) {
       spaces.push({
         code: `R${zone}${i.toString().padStart(3, '0')}`,
-        type: 'ຫ້ອງເຊົ່າ',
+        type: 'room',
         zone: zone as 'G' | 'A' | 'B' | 'C' | 'D',
         isAvailable: true
       });
@@ -44,7 +44,7 @@ const generateSpaceCodes = (): SpaceConfig[] => {
   for (let i = 1; i <= 3; i++) {
     spaces.push({
       code: `B${i.toString().padStart(3, '0')}`,
-      type: 'ບູດ',
+      type: 'booth',
       isAvailable: true
     });
   }
@@ -53,7 +53,7 @@ const generateSpaceCodes = (): SpaceConfig[] => {
   for (let i = 1; i <= 10; i++) {
     spaces.push({
       code: `S${i.toString().padStart(3, '0')}`,
-      type: 'ປ້າຍ',
+      type: 'signage',
       isAvailable: true
     });
   }
@@ -76,7 +76,7 @@ export const getAvailableSpaceCodes = (spaceType?: string, zone?: string): strin
     .sort();
 };
 
-export const getSpaceCodesByType = (spaceType: 'ໂຕະ' | 'ຫ້ອງເຊົ່າ' | 'ບູດ' | 'ປ້າຍ'): string[] => {
+export const getSpaceCodesByType = (spaceType: 'table' | 'room' | 'booth' | 'signage'): string[] => {
   return SPACE_CONFIGS
     .filter(space => space.type === spaceType)
     .map(space => space.code)
@@ -92,12 +92,12 @@ export const getSpaceCodesByZone = (zone: 'G' | 'A' | 'B' | 'C' | 'D'): string[]
 
 export const getRoomCodesByZone = (zone: 'G' | 'A' | 'B' | 'C' | 'D'): string[] => {
   return SPACE_CONFIGS
-    .filter(space => space.type === 'ຫ້ອງເຊົ່າ' && space.zone === zone)
+    .filter(space => space.type === 'room' && space.zone === zone)
     .map(space => space.code)
     .sort();
 };
 
-export const getNextAvailableSpaceCode = (spaceType: 'ໂຕະ' | 'ຫ້ອງເຊົ່າ' | 'ບູດ' | 'ປ້າຍ', zone?: 'G' | 'A' | 'B' | 'C' | 'D'): string | null => {
+export const getNextAvailableSpaceCode = (spaceType: 'table' | 'room' | 'booth' | 'signage', zone?: 'G' | 'A' | 'B' | 'C' | 'D'): string | null => {
   const availableCodes = getAvailableSpaceCodes(spaceType, zone);
   return availableCodes.length > 0 ? availableCodes[0] : null;
 };

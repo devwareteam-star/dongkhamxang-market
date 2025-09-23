@@ -1,8 +1,9 @@
 'use client';
 
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useData } from '@/lib/contexts/DataContext';
 import { useAuth } from '@/lib/contexts/AuthContext';
+import { StorageService } from '@/lib/firebase/firestore';
 import { 
   Settings, 
   Building2, 
@@ -10,7 +11,10 @@ import {
   Bell, 
   Receipt,
   Shield,
-  Save
+  Save,
+  Upload,
+  Eye,
+  X
 } from 'lucide-react';
 
 const SettingsManagement: React.FC = () => {
@@ -19,6 +23,10 @@ const SettingsManagement: React.FC = () => {
   const [activeTab, setActiveTab] = useState('market');
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [formData, setFormData] = useState(settings);
+
+  useEffect(() => {
+  setFormData(settings);
+}, [settings]);
 
   const handleSave = async () => {
     setIsSubmitting(true);
@@ -52,6 +60,44 @@ const SettingsManagement: React.FC = () => {
       }
     }));
   };
+  const handleQRImageUpload = async (event: React.ChangeEvent<HTMLInputElement>) => {
+  const file = event.target.files?.[0];
+  if (file) {
+    try {
+      // Upload to Firebase Storage
+      const { downloadURL, path } = await StorageService.uploadQRCodeImage(file, 'qr-code');
+      
+      // Update form data
+      setFormData(prev => ({
+        ...prev,
+        defaultRates: {
+          ...prev.defaultRates,
+          qrCodeImageUrl: downloadURL,
+          qrCodeImagePath: path
+        }
+      }));
+    } catch (error) {
+      alert('ອັບໂຫຼດ QR Code ລົ້ມເຫຼວ');
+    }
+  }
+};
+
+
+
+const removeQRImage = async () => {
+  if (formData.defaultRates.qrCodeImagePath) {
+    await StorageService.deletePaymentImage(formData.defaultRates.qrCodeImagePath);
+  }
+  
+  setFormData(prev => ({
+    ...prev,
+    defaultRates: {
+      ...prev.defaultRates,
+      qrCodeImageUrl: undefined,
+      qrCodeImagePath: undefined
+    }
+  }));
+};
 
   const tabs = [
     { id: 'market', label: 'ຂໍ້ມູນຕະຫຼາດ', icon: Building2 },
@@ -119,10 +165,12 @@ const SettingsManagement: React.FC = () => {
 
       case 'rates':
         return (
-          <div className="space-y-6">
-            <h3 className="text-lg font-semibold text-gray-900">ອັດຕາຄ່າເຊົ່າເລີ່ມຕົ້ນ</h3>
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-              <div>
+    <div className="space-y-6">
+      <h3 className="text-lg font-semibold text-gray-900">ອັດຕາຄ່າເຊົ່າເລີ່ມຕົ້ນ</h3>
+      
+      {/* Existing rate inputs */}
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+                      <div>
                 <label className="block text-sm font-medium text-gray-700 mb-2">ຄ່າເຊົ່າລາຍວັນ (KIP)</label>
                 <input
                   type="number"
@@ -149,9 +197,65 @@ const SettingsManagement: React.FC = () => {
                   className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
                 />
               </div>
-            </div>
-          </div>
-        );
+      </div>
+
+      {/* QR Code Section */}
+      <div className="border-t pt-6">
+        <h4 className="text-md font-medium text-gray-900 mb-4">QR Code ສຳລັບການຊຳລະ</h4>
+        
+{!formData.defaultRates.qrCodeImageUrl ? (
+  <div className="max-w-md">
+    <label className="flex flex-col items-center justify-center p-6 border-2 border-dashed border-gray-300 rounded-lg hover:border-gray-400 transition-colors cursor-pointer">
+      <Upload className="w-8 h-8 text-gray-400 mb-2" />
+      <span className="text-sm font-medium text-gray-600">ອັບໂຫຼດ QR Code</span>
+      <input
+        type="file"
+        accept="image/*"
+        onChange={handleQRImageUpload}
+        className="hidden"
+      />
+    </label>
+  </div>
+) : (
+  <div className="flex items-start space-x-4 max-w-md">
+    <img
+      src={formData.defaultRates.qrCodeImageUrl}
+      alt="QR Code"
+      className="w-24 h-24 object-cover rounded-lg border border-gray-300 cursor-pointer hover:opacity-80 transition-opacity"
+    />
+    <div className="flex-1">
+      <p className="text-sm font-medium text-gray-900">QR Code ສຳລັບການຊຳລະ</p>
+      <p className="text-xs text-gray-500 mt-1">ໃຊ້ສຳລັບສະແດງໃນ Payment Modal</p>
+      <div className="flex space-x-2 mt-3">
+        <label className="text-xs bg-gray-100 hover:bg-gray-200 px-3 py-1 rounded cursor-pointer flex items-center space-x-1">
+          <Upload className="w-3 h-3" />
+          <span>ເລືອກໃໝ່</span>
+          <input
+            type="file"
+            accept="image/*"
+            onChange={handleQRImageUpload}
+            className="hidden"
+          />
+        </label>
+        <button
+          type="button"
+          onClick={removeQRImage}
+          className="text-xs bg-red-100 hover:bg-red-200 text-red-700 px-3 py-1 rounded flex items-center space-x-1"
+        >
+          <X className="w-3 h-3" />
+          <span>ລຶບ</span>
+        </button>
+      </div>
+    </div>
+  </div>
+)}
+        
+        <p className="text-xs text-gray-500 mt-3">
+          QR Code ນີ້ຈະສະແດງໃນ Payment Modal ເມື່ອຜູ້ໃຊ້ເລືອກການຊຳລະແບບໂອນເງິນ
+        </p>
+      </div>
+    </div>
+  );
 
       case 'notifications':
         return (
@@ -369,7 +473,10 @@ const SettingsManagement: React.FC = () => {
           {renderTabContent()}
         </div>
       </div>
+      
     </div>
+
+    
   );
 };
 

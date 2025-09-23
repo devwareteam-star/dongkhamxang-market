@@ -17,11 +17,22 @@ import RoomSearch from '@/components/Search/RoomSearch';
 import TenantManagement from '@/components/Tenants/TenantManagement';
 // import NotificationCenter from '@/components/Notifications/NotificationCenter';
 import EmployeeSchedule from '@/components/Schedule/EmployeeSchedule';
+import SpaceLayoutDashboard from '@/components/SpaceDragDrop/SpaceDragDrop';
+import PaymentCollectionDashboard from '@/components/EmployeePaymentCollection/PaymentCollectionDashboard';
+import FloorPlanPaymentDashboard from '@/components/Payments/EmployeePaymentCollection';
 
 export default function Home() {
   const { user, isLoading } = useAuth();
   const [activeView, setActiveView] = useState('dashboard');
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
+  const [renderKey, setRenderKey] = useState(0); // ADD THIS: Force re-render key
+
+  // ADD THIS: Modified view change handler
+  const handleViewChange = (view: string) => {
+    setActiveView(view);
+    setRenderKey(prev => prev + 1); // Force re-render every time
+    console.log(`Switching to ${view} - Render key: ${renderKey + 1}`); // Debug log
+  };
 
   if (isLoading) {
     return (
@@ -65,42 +76,73 @@ export default function Home() {
   const renderContent = () => {
     switch (activeView) {
       case 'dashboard':
-        return isAdminOrManager() ? <AdminDashboard /> : <EmployeeDashboard />;
+        return isAdminOrManager() ? 
+          <AdminDashboard key={`admin-dashboard-${renderKey}`} /> : 
+          <EmployeeDashboard key={`employee-dashboard-${renderKey}`} />;
+
+      case 'layout':
+      case 'space-layout':
+        return hasPermission('spaces', 'read') ? 
+          <SpaceLayoutDashboard key={`space-layout-${renderKey}`} /> : 
+          <AccessDenied />;
       
       case 'spaces':
       case 'rooms':
-        return hasPermission('spaces', 'read') ? <SpaceManagement /> : <AccessDenied />;
+        return hasPermission('spaces', 'read') ? 
+          <SpaceManagement key={`space-management-${renderKey}`} /> : 
+          <AccessDenied />;
       
       case 'tenants':
-        return hasPermission('tenants', 'read') ? <TenantManagement /> : <AccessDenied />;
+        return hasPermission('tenants', 'read') ? 
+          <TenantManagement key={`tenant-management-${renderKey}`} /> : 
+          <AccessDenied />;
       
       case 'collect-payment':
       case 'payments':
-        return hasPermission('payments', 'read') ? <PaymentCollection /> : <AccessDenied />;
+        return hasPermission('payments', 'read') ? 
+          <PaymentCollection key={`payment-collection-${renderKey}`} /> : 
+          <AccessDenied />;
       
       case 'receipts':
-        return hasPermission('payments', 'read') ? <ReceiptManagement /> : <AccessDenied />;
+        return hasPermission('payments', 'read') ? 
+          <ReceiptManagement key={`receipt-management-${renderKey}`} /> : 
+          <AccessDenied />;
       
       case 'reports':
-        return hasPermission('reports', 'read') ? <ReportsManagement /> : <AccessDenied />;
+        return hasPermission('reports', 'read') ? 
+          <ReportsManagement key={`reports-management-${renderKey}`} /> : 
+          <AccessDenied />;
       
       // case 'notifications':
-      //   return <NotificationCenter />; // All users can see notifications
+      //   return <NotificationCenter key={`notification-center-${renderKey}`} />;
       
       case 'users':
-        return hasPermission('users', 'read') ? <UserManagement /> : <AccessDenied />;
+        return hasPermission('users', 'read') ? 
+          <UserManagement key={`user-management-${renderKey}`} /> : 
+          <AccessDenied />;
       
       case 'settings':
-        return isAdminOrManager() ? <SettingsManagement /> : <AccessDenied />;
+        return isAdminOrManager() ? 
+          <SettingsManagement key={`settings-management-${renderKey}`} /> : 
+          <AccessDenied />;
       
       case 'search':
-        return hasPermission('spaces', 'read') ? <RoomSearch /> : <AccessDenied />;
+        return hasPermission('spaces', 'read') ? 
+          <SpaceManagement key={`space-management-search-${renderKey}`} /> : 
+          <AccessDenied />;
+
+      case 'payment-collection':
+        return hasPermission('payments', 'read') ? 
+          <FloorPlanPaymentDashboard key={`floor-plan-payment-${renderKey}`} /> : 
+          <AccessDenied />;
       
       case 'schedule':
-        return <EmployeeSchedule />; // All users can see their schedule
+        return <EmployeeSchedule key={`employee-schedule-${renderKey}`} />;
       
       default:
-        return isAdminOrManager() ? <AdminDashboard /> : <EmployeeDashboard />;
+        return isAdminOrManager() ? 
+          <AdminDashboard key={`admin-dashboard-default-${renderKey}`} /> : 
+          <EmployeeDashboard key={`employee-dashboard-default-${renderKey}`} />;
     }
   };
 
@@ -108,7 +150,7 @@ export default function Home() {
     <div className="min-h-screen bg-gray-50 flex">
       {/* Desktop Sidebar */}
       <div className="hidden lg:block">
-        <Sidebar activeView={activeView} onViewChange={setActiveView} />
+        <Sidebar activeView={activeView} onViewChange={handleViewChange} />
       </div>
 
       {/* Mobile Sidebar Overlay */}
@@ -117,7 +159,7 @@ export default function Home() {
           <div className="fixed inset-0 bg-black opacity-50" onClick={() => setIsMobileMenuOpen(false)}></div>
           <div className="relative">
             <Sidebar activeView={activeView} onViewChange={(view) => {
-              setActiveView(view);
+              handleViewChange(view); // Use the modified handler
               setIsMobileMenuOpen(false);
             }} />
           </div>

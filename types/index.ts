@@ -6,10 +6,11 @@ export interface Space {
   id: string;
   spaceId: string;
   spaceCode: string; // T001, S001, A001, etc.
-  spaceType: 'ໂຕະ' | 'ຫ້ອງເຊົ່າ' | 'ປ້າຍ' | 'ບູດ'; // Table | Room | Signage | Booth
+  spaceType: 'table' | 'room' | 'booth' | 'signage' ; // Table | Room | Signage | Booth
   zone: "G" |'A' | 'B' | 'C' | 'D' | undefined;
-  status: 'ວ່າງ' | 'ເຊົ່າແລ້ວ' | 'ຊ່ອມແຊມ'; // Vacant | Rented | Maintenance
+  status: 'vacant' | 'rented' | 'maintainance'; // Vacant | Rented | Maintenance
   currentTenantId?: string;
+  currentTenantName?: string;
   currentContractId?: string;
   baseRentMonthly: number; // Amount in KIP
   productCategory?: string;
@@ -23,6 +24,16 @@ export interface Space {
   createdBy: string;
   paymentFrequency?: 'daily' | 'monthly' | 'yearly';
   originalRentAmount?: number;
+
+   paymentStatus?: {
+    currentStatus: 'no_tenant' | 'pending' | 'paid' | 'overdue';
+    currentPeriodPaid: boolean;
+    nextDueDate?: Date;
+    lateFee: number;
+    lateFeeApplied: boolean;
+    daysOverdue: number;
+    lastUpdated: Date;
+  };
   
 
 }
@@ -72,9 +83,9 @@ export interface ContractSpace {
 }
 
 export interface Payment {
-paymentId: string;
+  paymentId: string;
   tenantId: string; // Business ID like "bay001" 
-  spaceIds: string[]; // Firebase document IDs
+  spaceId: string;
   paymentPeriod: string; // YYYY-MM format
   paymentFrequency: 'daily' | 'monthly' | 'yearly';
   dueDate: Date;
@@ -83,15 +94,24 @@ paymentId: string;
   // Payment details
   amountPaid?: number;
   paymentDate?: Date;
-  paymentMethod?: 'ເງິນສົດ' | 'ໂອນເງິນ' | 'BCEL' | 'JDB';
-  paymentStatus: 'ລໍຖ້າ' | 'ຈ່າຍແລ້ວ' | 'ເກີນກຳນົດ' | 'ຈ່າຍບາງສ່ວນ' | undefined;
-  
-  // Optional fields
-  lateFee?: number;
+  paymentMethod?: 'cash' | 'transfer' | undefined;
+  paymentStatus: 'pending' | 'paid' | 'overdue' | 'partial' | undefined;
+  paymentImageUrl?: string; // Firebase Storage download URL
+  paymentImagePath?: string; // Firebase Storage path (for deletion)
+
+    // Late fee structure fields (add these)
+  originalAmount: number;        // Base rent amount (never changes)
+  lateFee: number;              // Current late fee amount
+  lateFeeRate: number | null;   // Applied rate (0.05, 0.10, 0.25, or null)
+  lateFeeApplied: boolean;      // Whether any late fee has been applied
+  originalDueDate: Date;        // Original due date (never changes)
+
+  // Add these back
   daysOverdue?: number;
   receiptNumber?: string;
   processedBy?: string;
   notes?: string;
+  
   
   // Timestamps
   createdAt: Date;
@@ -106,10 +126,18 @@ paymentId: string;
   paymentType: 'daily' | 'monthly' | 'yearly'; // Alias for paymentFrequency
 }
 
+// In types/index.ts - if you want a specific type
+interface PaidPayment extends Payment {
+  originalPaymentId: string;
+  movedToPaidAt: Date;
+  movedBy?: string;
+}
+
+
+
 export interface Bill {
   billId: string;
   paymentId: string;
-  contractId: string;
   tenantId: string;
   billNumber: string;
   billDate: Date;
@@ -286,6 +314,8 @@ export interface SystemSettings {
     monthlyRate: number;
     yearlyRate: number;
     dailyRate: number;
+    qrCodeImageUrl?: string; // Add this
+    qrCodeImagePath?: string; // Add this for deletion
   };
   notifications: {
     enableEmail: boolean;
@@ -311,6 +341,17 @@ export interface SystemSettings {
     enableTwoFactor: boolean;
     ipRestriction: boolean;
     allowedIPs: string[];
+  };
+
+  // Add late fee configuration
+  lateFees: {
+    tier1: { days: number, rate: number },
+  tier2: { days: number, rate: number },
+  tier3: { days: number, rate: number },
+  tier4?: { days: number, rate: number },
+  tier5?: { days: number, rate: number },
+  enableLateFees: boolean,
+  gracePeriodDays: number     // Days before late fees start
   };
 }
 
@@ -380,11 +421,11 @@ export const BillStatusLabels: Record<string, string> = {
 export const spaceToRoom = (space: Space): Room => ({
   id: space.spaceId,
   roomNumber: space.spaceCode,
-  size: space.spaceType === 'ໂຕະ' ? '2x2m' : '3x3m', // Default sizes
+  size: space.spaceType === 'table' ? '2x2m' : '3x3m', // Default sizes
   monthlyRate: space.baseRentMonthly,
   yearlyRate: space.baseRentMonthly * 12,
   dailyRate: Math.round(space.baseRentMonthly / 30),
-  status: space.status === 'ວ່າງ' ? 'vacant' : space.status === 'ເຊົ່າແລ້ວ' ? 'occupied' : 'maintenance',
+  status: space.status === 'vacant' ? 'vacant' : space.status === 'rented' ? 'occupied' : 'maintenance',
   location: `Zone ${space.zone}`,
   zone: space.zone,
   tenantId: space.currentTenantId,
@@ -396,12 +437,47 @@ export const roomToSpace = (room: Room): Space => ({
   id: room.id,           // Add this line - use room.id as the Firebase document ID
   spaceId: room.id,      // Keep this for backward compatibility
   spaceCode: room.roomNumber,
-  spaceType: 'ຫ້ອງເຊົ່າ', // Default to Room
+  spaceType: 'room', // Default to Room
   zone: room.zone as any || 'A',  // Changed 'SHOP_MAIN' to 'A' to match your zone type
-  status: room.status === 'vacant' ? 'ວ່າງ' : room.status === 'occupied' ? 'ເຊົ່າແລ້ວ' : 'ຊ່ອມແຊມ',
+  status: room.status === 'vacant' ? 'vacant' : room.status === 'occupied' ? 'rented' : 'maintainance',
   currentTenantId: room.tenantId,
   baseRentMonthly: room.monthlyRate,
   createdAt: new Date(),
   updatedAt: new Date(),
   createdBy: 'migration'
 });
+
+// =============================================================================
+// LATE FEE HELPER FUNCTIONS
+// =============================================================================
+
+export const calculateLateFee = (originalAmount: number, daysOverdue: number, settings: SystemSettings): { lateFee: number; rate: number | null } => {
+  if (!settings.lateFees.enableLateFees || daysOverdue <= settings.lateFees.gracePeriodDays) {
+    return { lateFee: 0, rate: null };
+  }
+  
+  let rate: number | null = null;
+  
+  // Check all 5 tiers from highest to lowest with proper null checking
+  if (settings.lateFees.tier5 && daysOverdue >= settings.lateFees.tier5.days) {
+    rate = settings.lateFees.tier5.rate;
+  } else if (settings.lateFees.tier4 && daysOverdue >= settings.lateFees.tier4.days) {
+    rate = settings.lateFees.tier4.rate;
+  } else if (daysOverdue >= settings.lateFees.tier3.days) {
+    rate = settings.lateFees.tier3.rate;
+  } else if (daysOverdue >= settings.lateFees.tier2.days) {
+    rate = settings.lateFees.tier2.rate;
+  } else if (daysOverdue >= settings.lateFees.tier1.days) {
+    rate = settings.lateFees.tier1.rate;
+  }
+  
+  return { 
+    lateFee: rate ? Math.round(originalAmount * rate) : 0, 
+    rate 
+  };
+}
+
+export const calculateDaysOverdue = (originalDueDate: Date, currentDate: Date = new Date()): number => {
+  const diffTime = currentDate.getTime() - originalDueDate.getTime();
+  return Math.max(0, Math.floor(diffTime / (1000 * 60 * 60 * 24)));
+};

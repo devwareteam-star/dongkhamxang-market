@@ -35,13 +35,14 @@ const unreadNotifications = notifications.filter(n =>
 
   const adminMenuItems = [
     { id: 'dashboard', label: 'ແດັຊບອດ', icon: Home },
+    { id: 'space-layout', label: 'ຈັດການຜັງຕະຫຼາດ', icon: FileText },
     { id: 'spaces', label: 'ຈັດການຫ້ອງເຊົ່າ', icon: Building2 },
     { id: 'tenants', label: 'ຈັດການຜູ້ເຊົ່າ', icon: UserCheck },
     { id: 'payments', label: 'ການຊຳລະເງິນ', icon: CreditCard },
     { id: 'receipts', label: 'ໃບຮັບເງິນ', icon: Receipt },
     { id: 'reports', label: 'ລາຍງານ', icon: BarChart3 },
     // { id: 'notifications', label: 'ການແຈ້ງເຕືອນ', icon: Bell, badge: unreadNotifications },
-    { id: 'users', label: 'ຈັດການຜູ້ໃຊ້', icon: Users },
+    // { id: 'users', label: 'ຈັດການຜູ້ໃຊ້', icon: Users },
     { id: 'settings', label: 'ຕັ້ງຄ່າລະບົບ', icon: Settings },
   ];
 
@@ -50,6 +51,7 @@ const unreadNotifications = notifications.filter(n =>
     { id: 'collect-payment', label: 'ເກັບເງິນຄ່າເຊົ່າ', icon: CreditCard },
     { id: 'receipts', label: 'ໃບຮັບເງິນ', icon: Receipt },
     { id: 'search', label: 'ຄົ້ນຫາຫ້ອງ', icon: Search },
+    { id: 'payment-collection', label: 'ການຊຳລະເງິນ', icon: CreditCard },
     { id: 'schedule', label: 'ຕາຕະລາງການ', icon: Calendar },
     // { id: 'notifications', label: 'ການແຈ້ງເຕືອນ', icon: Bell, badge: unreadNotifications },
   ];
@@ -112,6 +114,7 @@ const unreadNotifications = notifications.filter(n =>
           })}
         </ul>
       </nav>
+
       
       {/* Footer */}
       <div className="p-4 border-t border-gray-200 bg-gray-50">
