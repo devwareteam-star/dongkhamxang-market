@@ -27,6 +27,7 @@ const PaymentCollection: React.FC = () => {
     payments, 
     spaces, 
     tenants, 
+    settings,
     updatePayment, 
     generateReceiptNumber,
     generatePaymentsForAllTenants,
@@ -232,57 +233,71 @@ const PaymentCollection: React.FC = () => {
     setIsPaymentModalOpen(true);
   };
 
-  const handlePaymentCollectedFromModal = async (data: { 
-    paymentMethod: 'cash' | 'transfer' | undefined; 
-    notes?: string | undefined 
-  }) => {
-    if (!selectedPayment) return;
+const handlePaymentCollectedFromModal = async (data: { 
+  paymentMethod: 'cash' | 'transfer' | undefined; 
+  notes?: string | undefined;
+  paymentImage?: File; // ADD THIS LINE
+}) => {
+  if (!selectedPayment) return;
 
-    try {
-      const receiptNumber = generateReceiptNumber();
-      await updatePayment(selectedPayment.id, {
+  try {
+    const receiptNumber = generateReceiptNumber();
+    await updatePayment(
+      selectedPayment.id, 
+      {
         paymentStatus: 'paid',
         paymentDate: new Date(),
         paymentMethod: data.paymentMethod,
         receiptNumber,
         processedBy: user?.id,
         notes: data.notes || undefined
-      });
+      },
+      selectedPayment, // existing payment object
+      data.paymentImage // ADD THIS LINE - pass the image
+    );
 
-      setIsPaymentModalOpen(false);
-      setSelectedPayment(null);
-      alert("ການຊຳລະເງິນຖືກບັນທຶກແລ້ວ");
-    } catch (error) {
-      console.error("Error collecting payment:", error);
-      alert("ເກີດຂໍ້ຜິດພາດໃນການບັນທຶກການຊຳລະເງິນ");
-    }
-  };
+    setIsPaymentModalOpen(false);
+    setSelectedPayment(null);
+    alert("ການຊຳລະເງິນຖືກບັນທຶກແລ້ວ");
+  } catch (error) {
+    console.error("Error collecting payment:", error);
+    alert("ເກີດຂໍ້ຜິດພາດໃນການບັນທຶກການຊຳລະເງິນ");
+  }
+};
 
-  const handleBulkPaymentSubmit = async (data: {
-    payments: Payment[];
-    paymentMethod: 'cash' | 'transfer';
-    notes?: string;
-  }) => {
-    try {
-      for (const payment of data.payments) {
-        const receiptNumber = generateReceiptNumber();
-        await updatePayment(payment.id, {
+const handleBulkPaymentSubmit = async (data: {
+  payments: Payment[];
+  paymentMethod: 'cash' | 'transfer';
+  notes?: string;
+  paymentImage?: File;
+}) => {
+  try {
+    console.log('Starting bulk payment with image:', !!data.paymentImage); // Debug log
+    
+    for (const payment of data.payments) {
+      const receiptNumber = generateReceiptNumber();
+      await updatePayment(
+        payment.id, 
+        {
           paymentStatus: 'paid',
           paymentDate: new Date(),
           paymentMethod: data.paymentMethod,
           receiptNumber,
           processedBy: user?.id,
           notes: data.notes || undefined
-        });
-      }
-      
-      setIsBulkPaymentModalOpen(false);
-      alert(`ເກັບເງິນສຳເລັດແລ້ວ ${data.payments.length} ລາຍການ`);
-    } catch (error) {
-      console.error("Error processing bulk payments:", error);
-      alert("ເກີດຂໍ້ຜິດພາດໃນການເກັບເງິນຫຼາຍ");
+        },
+        payment, // providedPayment parameter
+        data.paymentImage // ADD THIS - pass the shared image to each payment
+      );
     }
-  };
+    
+    setIsBulkPaymentModalOpen(false);
+    alert(`ເກັບເງິນສຳເລັດແລ້ວ ${data.payments.length} ລາຍການ`);
+  } catch (error) {
+    console.error("Error processing bulk payments:", error);
+    alert("ເກີດຂໍ້ຜິດພາດໃນການເກັບເງິນຫຼາຍ");
+  }
+};
 
   // Status helpers
   const getStatusIcon = (payment: Payment) => {
@@ -573,10 +588,10 @@ const PaymentCollection: React.FC = () => {
                   className="w-full pl-9 pr-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent appearance-none text-sm"
                 >
                   <option value="all">ປະເພດທັງໝົດ</option>
-                  <option value="ໂຕະ">ໂຕະ</option>
-                  <option value="ຫ້ອງເຊົ່າ">ຫ້ອງເຊົ່າ</option>
-                  <option value="ປ້າຍ">ປ້າຍ</option>
-                  <option value="ບູດ">ບູດ</option>
+                  <option value="table">ໂຕະ</option>
+                  <option value="room">ຫ້ອງເຊົ່າ</option>
+                  <option value="signage">ປ້າຍ</option>
+                  <option value="booth">ບູດ</option>
                 </select>
               </div>
 
@@ -935,6 +950,7 @@ const PaymentCollection: React.FC = () => {
         payment={selectedPayment}
         spaces={spaces}
         tenants={tenants}
+        settings={settings}
         onClose={() => {
           setIsPaymentModalOpen(false);
           setSelectedPayment(null);
@@ -948,6 +964,7 @@ const PaymentCollection: React.FC = () => {
         payments={payments}
         spaces={spaces}
         tenants={tenants}
+        settings={settings}
         onClose={() => setIsBulkPaymentModalOpen(false)}
         onSubmit={handleBulkPaymentSubmit}
       />

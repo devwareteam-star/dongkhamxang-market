@@ -22,39 +22,30 @@ interface TenantModalProps {
 }
 
 // Add this after the interface definitions, before the component
-const generateTenantId = (
-  tenantName: string,
-  existingTenants: Tenant[]
-): string => {
-  // Clean the name: remove special characters, spaces, and convert to lowercase
-  const cleanName = tenantName
-    .toLowerCase()
-    .replace(/[^a-z0-9]/g, "")
-    .substring(0, 8); // Take up to 8 characters for the name part
-
-  // Find existing tenants with the same name prefix
-  const existingIds = existingTenants
-    .map((t) => t.tenantId)
-    .filter((id) => id.startsWith(cleanName))
-    .map((id) => {
-      const numberPart = id.replace(cleanName, "");
+const generateTenantId = (existingTenants: Tenant[]): string => {
+  // Extract numbers from existing tenant IDs that start with 'TN'
+  const existingNumbers = existingTenants
+    .map((t: Tenant) => t.tenantId)
+    .filter((id: string) => id.startsWith('TN'))
+    .map((id: string) => {
+      const numberPart = id.replace('TN', '');
       return parseInt(numberPart) || 0;
     })
-    .sort((a, b) => a - b);
+    .sort((a: number, b: number) => a - b);
 
-  // Find the next available number
+  // Find the next available number (fills gaps)
   let nextNumber = 1;
-  for (const num of existingIds) {
+  for (const num of existingNumbers) {
     if (num === nextNumber) {
       nextNumber++;
     } else {
-      break;
+      break; // Found a gap, use this number
     }
   }
 
-  // Format with leading zeros (001, 002, etc.)
-  const paddedNumber = nextNumber.toString().padStart(3, "0");
-  return `${cleanName}${paddedNumber}`;
+  // Return formatted ID with 4-digit padding
+  return `TN${nextNumber.toString().padStart(4, '0')}`;
+  // Results: TN0001, TN0002, TN0003, etc.
 };
 
 const TenantModal: React.FC<TenantModalProps> = ({
@@ -346,16 +337,16 @@ const validateSpaceSelection = (): string[] => {
                 <input
                   type="text"
                   value={formData.tenantName}
-                  onChange={(e) => {
-                    const name = e.target.value;
-                    handleInputChange("tenantName", name);
+                 onChange={(e) => {
+  const name = e.target.value;
+  handleInputChange("tenantName", name);
 
-                    // Auto-generate tenantId for new tenants
-                    if (!editingTenant && name.trim()) {
-                      const newId = generateTenantId(name, tenants); // Pass existing tenants
-                      handleInputChange("tenantId", newId);
-                    }
-                  }}
+  // Auto-generate tenantId for new tenants
+  if (!editingTenant && name.trim()) {
+    const newId = generateTenantId(tenants); // Remove 'name' parameter
+    handleInputChange("tenantId", newId);
+  }
+}}
                   className={`w-full px-4 py-3 border rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent ${
                     errors.tenantName ? "border-red-500" : "border-gray-300"
                   }`}

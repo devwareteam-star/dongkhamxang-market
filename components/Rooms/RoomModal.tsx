@@ -1,7 +1,7 @@
 "use client";
 
 import React, { useState, useEffect } from "react";
-import { X, Building2, MapPin, DollarSign } from "lucide-react";
+import { X, Building2, MapPin, DollarSign, ChevronDown} from "lucide-react";
 import { Space, SpaceFormData } from "@/types";
 import { useData } from "@/lib/contexts/DataContext";
 
@@ -31,6 +31,7 @@ const SpaceModal: React.FC<SpaceModalProps> = ({
   type PaymentFrequency = "daily" | "monthly" | "yearly";
 
 const { spaces } = useData();
+const [showSpaceCodeList, setShowSpaceCodeList] = useState(false);
 
 
   const getPaymentOptionsForSpaceType = (
@@ -406,12 +407,29 @@ const handleAutoSuggestSpaceCode = () => {
 
                 {/* Auto-suggest button */}
                 <button
-                  type="button"
-                  onClick={handleAutoSuggestSpaceCode}
-                  className="absolute right-2 top-1/2 transform -translate-y-1/2 px-3 py-1 text-xs bg-blue-100 text-blue-700 rounded hover:bg-blue-200 transition-colors"
-                >
-                  ແນະນຳ
-                </button>
+  type="button"
+  onClick={() => setShowSpaceCodeList(!showSpaceCodeList)}
+  className="absolute right-2 top-1/2 transform -translate-y-1/2 p-2 text-blue-600 hover:bg-blue-50 rounded transition-colors"
+>
+  <ChevronDown className={`w-4 h-4 transition-transform ${showSpaceCodeList ? 'rotate-180' : ''}`} />
+</button>
+{showSpaceCodeList && (
+  <div className="absolute top-full left-0 right-0 z-10 mt-1 bg-white border border-gray-300 rounded-lg shadow-lg max-h-40 overflow-y-auto">
+    {getAvailableSpaceCodesForCurrentSelection().map((code) => (
+      <button
+        key={code}
+        type="button"
+        onClick={() => {
+          handleSpaceCodeChange(code);
+          setShowSpaceCodeList(false);
+        }}
+        className="w-full text-left px-3 py-2 hover:bg-blue-50 text-sm"
+      >
+        {code}
+      </button>
+    ))}
+  </div>
+)}
               </div>
 
               {errors.spaceCode && (
@@ -451,7 +469,6 @@ const handleAutoSuggestSpaceCode = () => {
                 className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
               >
                 <option value="ວ່າງ">ວ່າງ (Vacant)</option>
-                <option value="ເຊົ່າແລ້ວ">ເຊົ່າແລ້ວ (Rented)</option>
                 <option value="ຊ່ອມແຊມ">ຊ່ອມແຊມ (Maintenance)</option>
               </select>
             </div>

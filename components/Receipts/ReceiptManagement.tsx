@@ -33,6 +33,7 @@ const ReceiptManagement: React.FC = () => {
   const [showImageModal, setShowImageModal] = useState(false);
   const [showFilters, setShowFilters] = useState(false);
 
+
   // Handle get image
   const handleViewImage = (imageUrl: string) => {
     setSelectedImage(imageUrl);

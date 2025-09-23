@@ -314,6 +314,8 @@ export interface SystemSettings {
     monthlyRate: number;
     yearlyRate: number;
     dailyRate: number;
+    qrCodeImageUrl?: string; // Add this
+    qrCodeImagePath?: string; // Add this for deletion
   };
   notifications: {
     enableEmail: boolean;

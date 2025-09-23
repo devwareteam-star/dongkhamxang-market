@@ -17,7 +17,6 @@ import {
 } from 'firebase/firestore';
 import { ref, uploadBytes, getDownloadURL, deleteObject } from 'firebase/storage';
 import { db, storage } from './config';
-import { ImageCompression } from '../utils/imageCompression';
 
 // Storage Service Class for handling file uploads
 export class StorageService {
@@ -86,7 +85,7 @@ export class StorageService {
       const timestamp = Date.now();
       const fileExtension = fileToUpload.type.split('/')[1] || 'jpg';
       const fileName = `payment-${paymentId}-${timestamp}.${fileExtension}`;
-      const path = `payments/${fileName}`;
+      const path = `bulk-payments/${fileName}`;
       
       // Create storage reference
       const storageRef = ref(storage, path);
@@ -190,6 +189,61 @@ export class StorageService {
       // Don't throw error here - image might already be deleted
     }
   }
+
+  // Add this method to your StorageService class
+static async uploadQRCodeImage(
+  file: File, 
+  qrId: string,
+  onProgress?: (progress: number) => void
+): Promise<{ downloadURL: string; path: string }> {
+  try {
+    console.log('Original QR file size:', (file.size / 1024).toFixed(1), 'KB');
+    
+    // Compress image if it's larger than 500KB
+    let fileToUpload = file;
+    if (file.size > 500 * 1024) {
+      console.log('Compressing QR image...');
+      fileToUpload = await this.compressImage(file, 800, 0.9); // Smaller size for QR, higher quality
+      console.log('Compressed QR file size:', (fileToUpload.size / 1024).toFixed(1), 'KB');
+    }
+    
+    const timestamp = Date.now();
+    const fileExtension = fileToUpload.type.split('/')[1] || 'jpg';
+    const fileName = `qr-code-${qrId}-${timestamp}.${fileExtension}`;
+    const path = `qr-codes/${fileName}`; // Different folder for QR codes
+    
+    const storageRef = ref(storage, path);
+    
+    console.log('Starting QR upload...');
+    const uploadTask = uploadBytes(storageRef, fileToUpload);
+    
+    // Monitor progress
+    if (onProgress) {
+      let progress = 0;
+      const progressInterval = setInterval(() => {
+        progress += 10;
+        onProgress(progress);
+        if (progress >= 90) {
+          clearInterval(progressInterval);
+        }
+      }, 200);
+      
+      uploadTask.finally(() => {
+        clearInterval(progressInterval);
+        onProgress(100);
+      });
+    }
+    
+    const snapshot = await uploadTask;
+    const downloadURL = await getDownloadURL(snapshot.ref);
+    
+    console.log('QR upload completed successfully');
+    return { downloadURL, path };
+  } catch (error) {
+    console.error('Error uploading QR code image:', error);
+    throw new Error('Failed to upload QR code image');
+  }
+}
 }
 
 // Generic CRUD operations for Firestore

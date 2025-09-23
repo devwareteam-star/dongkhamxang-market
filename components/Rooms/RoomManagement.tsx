@@ -226,9 +226,9 @@ const SpaceManagement: React.FC = () => {
                 className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent appearance-none"
               >
                 <option value="all">ສະຖານະທັງໝົດ</option>
-                <option value="ວ່າງ">ວ່າງ</option>
-                <option value="ເຊົ່າແລ້ວ">ເຊົ່າແລ້ວ</option>
-                <option value="ຊ່ອມແຊມ">ຊ່ອມແຊມ</option>
+                <option value="vacant">ວ່າງ</option>
+                <option value="rented">ເຊົ່າແລ້ວ</option>
+                <option value="maintanace">ຊ່ອມແຊມ</option>
               </select>
               <ChevronDown className="absolute right-3 top-1/2 transform -translate-y-1/2 w-5 h-5 text-gray-400 pointer-events-none" />
             </div>
@@ -240,31 +240,31 @@ const SpaceManagement: React.FC = () => {
                 className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent appearance-none"
               >
                 <option value="all">ປະເພດທັງໝົດ</option>
-                <option value="ໂຕະ">ໂຕະ</option>
-                <option value="ຫ້ອງເຊົ່າ">ຫ້ອງເຊົ່າ</option>
-                <option value="ປ້າຍ">ປ້າຍ</option>
-                <option value="ບູດ">ບູດ</option>
+                <option value="table">ໂຕະ</option>
+                <option value="room">ຫ້ອງເຊົ່າ</option>
+                <option value="signage">ປ້າຍ</option>
+                <option value="booth">ບູດ</option>
               </select>
               <ChevronDown className="absolute right-3 top-1/2 transform -translate-y-1/2 w-5 h-5 text-gray-400 pointer-events-none" />
             </div>
 
-            {spaces.some((space) => space.spaceType === "room") && (
-              <div className="relative">
-                <select
-                  value={zoneFilter}
-                  onChange={(e) => setZoneFilter(e.target.value)}
-                  className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent appearance-none"
-                >
-                  <option value="all">ໂຊນທັງໝົດ</option>
-                  <option value="G">G</option>
-                  <option value="A">A</option>
-                  <option value="B">B</option>
-                  <option value="C">C</option>
-                  <option value="D">D</option>
-                </select>
-                <ChevronDown className="absolute right-3 top-1/2 transform -translate-y-1/2 w-5 h-5 text-gray-400 pointer-events-none" />
-              </div>
-            )}
+           {typeFilter === "room" && (
+  <div className="relative">
+    <select
+      value={zoneFilter}
+      onChange={(e) => setZoneFilter(e.target.value)}
+      className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent appearance-none"
+    >
+      <option value="all">ໂຊນທັງໝົດ</option>
+      <option value="G">G</option>
+      <option value="A">A</option>
+      <option value="B">B</option>
+      <option value="C">C</option>
+      <option value="D">D</option>
+    </select>
+    <ChevronDown className="absolute right-3 top-1/2 transform -translate-y-1/2 w-5 h-5 text-gray-400 pointer-events-none" />
+  </div>
+)}
 
             <div className="relative">
               <select
@@ -304,84 +304,88 @@ const SpaceManagement: React.FC = () => {
               </p>
             </div>
           ) : (
-            <div className="divide-y divide-gray-200">
-              {filteredSpaces.map((space) => {
-                const tenant = tenants.find(
-                  (t) => t.allSpace?.includes(space.id)
-                );
+            <div className="max-h-[500px] overflow-y-auto">
+              <div className="divide-y divide-gray-200">
+                {filteredSpaces
+                  .sort((a, b) => a.spaceCode.localeCompare(b.spaceCode))
+                  .map((space) => {
+                  const tenant = tenants.find(
+                    (t) => t.allSpace?.includes(space.id)
+                  );
 
-                return (
-                  <div key={space.id} className="p-4">
-                    <div className="flex justify-between items-start mb-3">
-                      <div className="flex flex-col space-y-2">
-                        {getTypeBadge(space.spaceType)}
-                        <div className="font-bold text-lg text-gray-900">
-                          {space.spaceCode}
+                  return (
+                    <div key={space.id} className=" p-4">
+                      <div className="flex justify-between items-start mb-3">
+                        <div className="flex flex-col space-y-2">
+                          {getTypeBadge(space.spaceType)}
+                          <div className="font-bold text-lg text-gray-900">
+                            {space.spaceCode}
+                          </div>
+                        </div>
+                        <div className="flex space-x-2">
+                          <button
+                            onClick={() => handleEditSpace(space)}
+                            className="p-2 text-blue-600 hover:bg-blue-100 rounded-lg transition-colors"
+                            title="ແກ້ໄຂ"
+                          >
+                            <Edit className="w-4 h-4" />
+                          </button>
+                          <button
+                            onClick={() => handleDeleteSpace(space.id)}
+                            disabled={isSubmitting}
+                            className="p-2 text-red-600 hover:bg-red-100 rounded-lg transition-colors disabled:opacity-50"
+                            title="ລົບ"
+                          >
+                            <Trash2 className="w-4 h-4" />
+                          </button>
                         </div>
                       </div>
-                      <div className="flex space-x-2">
-                        <button
-                          onClick={() => handleEditSpace(space)}
-                          className="p-2 text-blue-600 hover:bg-blue-100 rounded-lg transition-colors"
-                          title="ແກ້ໄຂ"
-                        >
-                          <Edit className="w-4 h-4" />
-                        </button>
-                        <button
-                          onClick={() => handleDeleteSpace(space.id)}
-                          disabled={isSubmitting}
-                          className="p-2 text-red-600 hover:bg-red-100 rounded-lg transition-colors disabled:opacity-50"
-                          title="ລົບ"
-                        >
-                          <Trash2 className="w-4 h-4" />
-                        </button>
+
+                      <div className="grid grid-cols-2 gap-3 text-sm">
+                        <div>
+                          <span className="text-gray-500">ສະຖານະ:</span>
+                          <div className="mt-1">{getStatusBadge(space.status)}</div>
+                        </div>
+                        
+                        <div>
+                          <span className="text-gray-500">ລາຄາ:</span>
+                          <div className="mt-1 font-medium text-blue-600">
+                            ₭{space.originalRentAmount?.toLocaleString()}
+                          </div>
+                        </div>
+
+                        {space.spaceType === "room" && (
+                          <div>
+                            <span className="text-gray-500">ໂຊນ:</span>
+                            <div className="mt-1 flex items-center text-gray-700">
+                              <MapPin className="w-3 h-3 mr-1" />
+                              {space.zone}
+                            </div>
+                          </div>
+                        )}
+
+                        {tenant && (
+                          <div>
+                            <span className="text-gray-500">ຜູ້ເຊົ່າ:</span>
+                            <div className="mt-1 text-purple-600 font-medium">
+                              {tenant.tenantName}
+                            </div>
+                          </div>
+                        )}
+
+                        {space.productCategory && (
+                          <div className="col-span-2">
+                            <span className="text-gray-500">ປະເພດສິນຄ້າ:</span>
+                            <div className="mt-1 text-gray-700">
+                              {space.productCategory}
+                            </div>
+                          </div>
+                        )}
                       </div>
                     </div>
-
-                    <div className="grid grid-cols-2 gap-3 text-sm">
-                      <div>
-                        <span className="text-gray-500">ສະຖານະ:</span>
-                        <div className="mt-1">{getStatusBadge(space.status)}</div>
-                      </div>
-                      
-                      <div>
-                        <span className="text-gray-500">ລາຄາ:</span>
-                        <div className="mt-1 font-medium text-blue-600">
-                          ₭{space.originalRentAmount?.toLocaleString()}
-                        </div>
-                      </div>
-
-                      {space.spaceType === "room" && (
-                        <div>
-                          <span className="text-gray-500">ໂຊນ:</span>
-                          <div className="mt-1 flex items-center text-gray-700">
-                            <MapPin className="w-3 h-3 mr-1" />
-                            {space.zone}
-                          </div>
-                        </div>
-                      )}
-
-                      {tenant && (
-                        <div>
-                          <span className="text-gray-500">ຜູ້ເຊົ່າ:</span>
-                          <div className="mt-1 text-purple-600 font-medium">
-                            {tenant.tenantName}
-                          </div>
-                        </div>
-                      )}
-
-                      {space.productCategory && (
-                        <div className="col-span-2">
-                          <span className="text-gray-500">ປະເພດສິນຄ້າ:</span>
-                          <div className="mt-1 text-gray-700">
-                            {space.productCategory}
-                          </div>
-                        </div>
-                      )}
-                    </div>
-                  </div>
-                );
-              })}
+                  );
+                })}
+              </div>
             </div>
           )}
         </div>
@@ -425,7 +429,9 @@ const SpaceManagement: React.FC = () => {
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-gray-200">
-                  {filteredSpaces.map((space) => {
+                  {filteredSpaces
+                    .sort((a, b) => a.spaceCode.localeCompare(b.spaceCode))
+                    .map((space) => {
                     const tenant = tenants.find(
                       (t) => t.allSpace?.includes(space.id)
                     );

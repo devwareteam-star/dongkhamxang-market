@@ -60,7 +60,7 @@ interface DataContextType {
   addPayment: (
     payment: Omit<Payment, "paymentId" | "createdAt" | "updatedAt">
   ) => Promise<void>;
-  updatePayment: (id: string, payment: Partial<Payment>) => Promise<void>;
+updatePayment: (id: string, payment: Partial<Payment>, providedPayment?: Payment, paymentImage?: File) => Promise<void>;
   deletePayment: (id: string) => Promise<void>;
   // Add new bulk payment handler
   handleBulkPayments: (data: {
@@ -132,6 +132,8 @@ const defaultSettings: SystemSettings = {
     dailyRate: 50000,
     monthlyRate: 1200000,
     yearlyRate: 12000000,
+     qrCodeImageUrl: undefined, // Add this
+    qrCodeImagePath: undefined, // Add this
   },
 
   // Add late fee defaults
@@ -297,6 +299,7 @@ const loadPaidPayments = async () => {
         usersService.getAll(),
         notificationsService.getAll(),
       ]);
+      
 
       // Convert timestamps first
       const processedSpaces = spacesData.map(convertTimestamps) as Space[];
@@ -347,6 +350,30 @@ if (enhancedPayments.length > 0) {
       setLoading(false);
     }
   };
+
+
+  // Load Image from setting
+  useEffect(() => {
+  const loadSettings = async () => {
+    try {
+      const { doc, getDoc, getFirestore } = await import('firebase/firestore');
+      const db = getFirestore();
+      const settingsDoc = await getDoc(doc(db, 'systemSettings', 'main'));
+      
+      if (settingsDoc.exists()) {
+        const savedSettings = settingsDoc.data() as SystemSettings;
+        setSettings(savedSettings);
+        console.log('Settings loaded from database:', savedSettings);
+      } else {
+        console.log('No saved settings found, using defaults');
+      }
+    } catch (error) {
+      console.error('Error loading settings:', error);
+    }
+  };
+  
+  loadSettings();
+}, []);
 
   // **Payment generation functions, 1. check tenant, 2. check space, 3. Checks what bills already exist (to avoid duplicates), 4. Calculates when the next bill is due & 5. Creates new bills for each space they rent
   const generatePaymentsForTenant = async (
@@ -665,26 +692,34 @@ const movePaymentToPaidCollection = async (
   paymentImage?: File
 ) => {
   try {
-    let imageData = {};
+    console.log('movePaymentToPaidCollection called with image:', !!paymentImage); // Debug log
     
-    // Upload image if provided
+    let imageData = {};
     if (paymentImage) {
-      console.log('Uploading payment image...');
+      console.log('Uploading payment image...', paymentImage.name, paymentImage.size);
       const { downloadURL, path } = await StorageService.uploadPaymentImage(
         paymentImage, 
-        payment.paymentId || payment.id
+        payment.paymentId || payment.id // FIX: Use payment's ID, not undefined 'id'
       );
-      imageData = {
-        paymentImageUrl: downloadURL,
-        paymentImagePath: path
+      imageData = { 
+        paymentImageUrl: downloadURL, 
+        paymentImagePath: path 
       };
+      
+      // Delete old image if it exists
+      if (payment.paymentImagePath) {
+        await StorageService.deletePaymentImage(payment.paymentImagePath);
+      }
+      
       console.log('Payment image uploaded successfully');
+    } else {
+      console.log('No payment image provided to movePaymentToPaidCollection');
     }
 
     const paidPaymentData = {
       ...payment,
       ...updatedData,
-      ...imageData, // Add image data
+      ...imageData,
       originalPaymentId: payment.paymentId || payment.id,
       movedToPaidAt: new Date(),
     };
@@ -1365,23 +1400,23 @@ const updatePayment = async (
     }
 
     // ADD THIS BLOCK FOR IMAGE HANDLING:
-    let imageData = {};
-    if (paymentImage) {
-      console.log('Uploading payment image for update...');
-      const { downloadURL, path } = await StorageService.uploadPaymentImage(
-        paymentImage, 
-        id
-      );
-      imageData = {
-        paymentImageUrl: downloadURL,
-        paymentImagePath: path
-      };
+    // let imageData = {};
+    // if (paymentImage) {
+    //   console.log('Uploading payment image for update...');
+    //   const { downloadURL, path } = await StorageService.uploadPaymentImage(
+    //     paymentImage, 
+    //     id
+    //   );
+    //   imageData = {
+    //     paymentImageUrl: downloadURL,
+    //     paymentImagePath: path
+    //   };
       
-      // Delete old image if it exists
-      if (currentPayment.paymentImagePath) {
-        await StorageService.deletePaymentImage(currentPayment.paymentImagePath);
-      }
-    }
+    //   // Delete old image if it exists
+    //   if (currentPayment.paymentImagePath) {
+    //     await StorageService.deletePaymentImage(currentPayment.paymentImagePath);
+    //   }
+    // }
     // END OF NEW IMAGE BLOCK
 
     // Check if this update is marking the payment as paid
@@ -1398,7 +1433,7 @@ const updatePayment = async (
       console.log(`Payment marked as paid for tenant ${tenantId}, frequency: ${paymentFrequency}, space: ${spaceId}`);
 
       // CHANGE THIS LINE TO PASS IMAGE DATA:
-      await movePaymentToPaidCollection(currentPayment, { ...paymentUpdate, ...imageData }, paymentImage);
+      await movePaymentToPaidCollection(currentPayment, paymentUpdate, paymentImage);
 
       // YOUR EXISTING NEXT PAYMENT GENERATION CODE STAYS THE SAME:
       if (tenantId && paymentFrequency && spaceId) {
@@ -1545,7 +1580,7 @@ const updatePayment = async (
       paidDate,
       paymentType,
       ...firebaseUpdate
-    } = { ...paymentUpdate, ...imageData }; // ADD ...imageData HERE
+    } = { ...paymentUpdate, }; // ADD ...imageData HERE
 
     // Map English status back to Lao if provided
     if (status) {
@@ -1568,7 +1603,7 @@ const updatePayment = async (
     setPayments((prev) =>
       prev.map((payment) => {
         if (payment.paymentId === id || payment.id === id) {
-          const updatedPayment = { ...payment, ...paymentUpdate, ...imageData }; // ADD ...imageData HERE
+          const updatedPayment = { ...payment, ...paymentUpdate, }; // ADD ...imageData HERE
           return enhancePaymentWithLegacyFields(
             updatedPayment,
             tenants,
@@ -1912,9 +1947,24 @@ const handleBulkPayments = async (data: {
     return `${prefix}${timestamp}${random}`;
   };
 
-  const updateSettings = (newSettings: Partial<SystemSettings>) => {
-    setSettings((prev) => ({ ...prev, ...newSettings }));
-  };
+ const updateSettings = async (newSettings: Partial<SystemSettings>) => {
+  try {
+    const updatedSettings = { ...settings, ...newSettings };
+    
+    // Update local state first
+    setSettings(updatedSettings);
+    
+    // Save to Firestore (ADD THIS PART)
+    const { doc, setDoc, getFirestore } = await import('firebase/firestore');
+    const db = getFirestore();
+    await setDoc(doc(db, 'systemSettings', 'main'), updatedSettings);
+    
+    console.log('Settings saved to database successfully');
+  } catch (error) {
+    console.error('Error saving settings:', error);
+    throw error;
+  }
+};
 
   const getDashboardStats = (): DashboardStats => {
     try {

@@ -7,7 +7,6 @@ interface SpaceDragDropModalProps {
   onClose: () => void;
   space: Space | null;
   onEdit?: (space: Space) => void;
-  onStatusChange?: (spaceId: string, status: Space['status']) => void;
   onRemoveTenant?: (spaceId: string) => void;
 }
 
@@ -16,7 +15,7 @@ const SpaceDragDropModal: React.FC<SpaceDragDropModalProps> = ({
   onClose,
   space,
   onEdit,
-  onStatusChange,
+
   onRemoveTenant
 }) => {
   const [activeTab, setActiveTab] = useState<'details' | 'tenant' | 'history'>('details');
@@ -109,6 +108,14 @@ const SpaceDragDropModal: React.FC<SpaceDragDropModalProps> = ({
               </div>
             </div>
 
+            {/* Product Category */}
+            {space.productCategory && (
+              <div className="border-t pt-4">
+                <label className="text-sm font-medium text-gray-500">ປະເພດສິນຄ້າ</label>
+                <p className="text-lg font-semibold text-gray-900">{space.productCategory}</p>
+              </div>
+            )}
+
             {/* Position Information */}
             {space.position && (
               <div className="border-t pt-4">
@@ -122,13 +129,7 @@ const SpaceDragDropModal: React.FC<SpaceDragDropModalProps> = ({
               </div>
             )}
 
-            {/* Product Category */}
-            {space.productCategory && (
-              <div className="border-t pt-4">
-                <label className="text-sm font-medium text-gray-500">ປະເພດສິນຄ້າ</label>
-                <p className="text-lg font-semibold text-gray-900">{space.productCategory}</p>
-              </div>
-            )}
+            
           </div>
         );
 
@@ -236,15 +237,6 @@ const SpaceDragDropModal: React.FC<SpaceDragDropModalProps> = ({
           </div>
           
           <div className="flex items-center space-x-3">
-            {onEdit && (
-              <button
-                onClick={() => onEdit(space)}
-                className="flex items-center space-x-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
-              >
-                <Edit3 className="w-4 h-4" />
-                <span>ແກ້ໄຂ</span>
-              </button>
-            )}
             <button
               onClick={onClose}
               className="p-2 hover:bg-gray-100 rounded-lg transition-colors"
@@ -284,33 +276,6 @@ const SpaceDragDropModal: React.FC<SpaceDragDropModalProps> = ({
         </div>
 
         {/* Footer Actions */}
-        {onStatusChange && (
-          <div className="border-t border-gray-200 p-6 bg-gray-50">
-            <div className="flex items-center justify-between">
-              <div>
-                <label className="text-sm font-medium text-gray-700">ປ່ຽນສະຖານະ:</label>
-                <select
-                  value={space.status}
-                  onChange={(e) => onStatusChange(space.id, e.target.value as Space['status'])}
-                  className="ml-3 px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                >
-                  <option value="vacant">ວ່າງ (Vacant)</option>
-                  <option value="rented">ເຊົ່າແລ້ວ (Rented)</option>
-                  <option value="maintainance">ຊ່ອມແຊມ (Maintenance)</option>
-                </select>
-              </div>
-              
-              <div className="flex space-x-3">
-                <button
-                  onClick={onClose}
-                  className="px-4 py-2 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 transition-colors"
-                >
-                  ປິດ
-                </button>
-              </div>
-            </div>
-          </div>
-        )}
       </div>
     </div>
   );
