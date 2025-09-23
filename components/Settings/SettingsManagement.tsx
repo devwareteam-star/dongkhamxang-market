@@ -102,9 +102,9 @@ const removeQRImage = async () => {
   const tabs = [
     { id: 'market', label: 'ຂໍ້ມູນຕະຫຼາດ', icon: Building2 },
     { id: 'rates', label: 'ອັດຕາຄ່າເຊົ່າ', icon: DollarSign },
-    { id: 'notifications', label: 'ການແຈ້ງເຕືອນ', icon: Bell },
+    // { id: 'notifications', label: 'ການແຈ້ງເຕືອນ', icon: Bell },
     { id: 'receipt', label: 'ໃບເສັດ', icon: Receipt },
-    { id: 'security', label: 'ຄວາມປອດໄພ', icon: Shield }
+    // { id: 'security', label: 'ຄວາມປອດໄພ', icon: Shield }
   ];
 
   const renderTabContent = () => {
