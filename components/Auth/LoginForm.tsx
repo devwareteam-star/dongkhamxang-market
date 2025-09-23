@@ -33,9 +33,10 @@ const LoginForm: React.FC = () => {
     if (value.length > 20) {
       return 'ຊື່ຜູ້ໃຊ້ຕ້ອງບໍ່ເກີນ 20 ຕົວອັກສອນ';
     }
-    if (!/^[a-zA-Z0-9_]+$/.test(value)) {
-      return 'ຊື່ຜູ້ໃຊ້ໃຊ້ໄດ້ແຕ່ຕົວອັກສອນ ຕົວເລກ ແລະ _';
-    }
+    if (!/^[a-zA-Z0-9_@.#$%&*+-=?^`{|}~]+$/.test(value)) {
+  return 'ຊື່ຜູ້ໃຊ້ມີຕົວອັກສອນທີ່ບໍ່ອະນຸຍາດ';
+}
+
     return undefined;
   };
 
